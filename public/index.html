@@ -16,9 +16,11 @@ button:disabled{background:#999}
 .anime-card h3{font-size:13px;margin:8px 0 4px}
 .anime-card p{font-size:11px;color:#666;margin:2px 0}
 .characters-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:15px;margin-top:20px}
-.char-card{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 5px rgba(0,0,0,.1)}
-.char-card img{width:100%;height:200px;object-fit:cover;background:#ddd}
-.char-info{padding:10px}
+.char-card{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 5px rgba(0,0,0,.1);display:flex;flex-direction:column}
+.char-img-wrap{width:100%;height:200px;background:#eee;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.char-img-wrap img{width:100%;height:100%;object-fit:cover}
+.char-placeholder{font-size:48px;font-weight:bold;color:#aaa;text-transform:uppercase}
+.char-info{padding:10px;flex:1}
 .char-name{font-weight:bold;font-size:14px}
 .char-role{font-size:12px;color:#d9534f;margin:4px 0;font-weight:600}
 .error{color:#d9534f;background:#fdd;padding:10px;border-radius:6px;margin:10px 0}
@@ -93,7 +95,7 @@ async function searchAnime() {
       card.onclick = () => selectAnime(anime, card);
       const imgSrc = anime.image?.original ? SHIKI_IMG + anime.image.original : '';
       card.innerHTML = `
-        <img src="${imgSrc}" alt="">
+        <img src="${imgSrc}" alt="" onerror="this.style.display='none'">
         <h3>${anime.russian || anime.name}</h3>
         <p>${anime.name}</p>
         <p><span class="badge">${anime.kind||'?'}</span> ${(anime.aired_on||'').slice(0,4)} • ${anime.status||''}</p>`;
@@ -186,12 +188,20 @@ function renderCharacters() {
   });
   grid.innerHTML = '';
   if (!list.length) { grid.innerHTML = '<p>Нет персонажей по фильтру.</p>'; return; }
+  
   list.slice(0,200).forEach(c => {
     const card = document.createElement('div');
     card.className = 'char-card';
     const actors = c.actors.length ? c.actors.map(a => a.russian||a.name).join(', ') : 'Не указано';
+    const initial = (c.russian || c.name || '?').charAt(0).toUpperCase();
+    
+    // Если картинка есть — показываем её. Если нет или 404 — заглушка с инициалом.
+    const imgHtml = c.image 
+      ? `<img src="${c.image}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'char-placeholder\\'>${initial}</div>'">`
+      : `<div class="char-placeholder">${initial}</div>`;
+    
     card.innerHTML = `
-      <img src="${c.image||''}" alt="" loading="lazy">
+      <div class="char-img-wrap">${imgHtml}</div>
       <div class="char-info">
         <div class="char-name">${c.russian||c.name||'Не указано'}</div>
         <div class="char-role">${c.role||'Не указано'}</div>
@@ -200,6 +210,7 @@ function renderCharacters() {
       </div>`;
     grid.appendChild(card);
   });
+  
   if (list.length > 200) {
     const more = document.createElement('p');
     more.style.gridColumn = '1/-1';
