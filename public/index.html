@@ -145,7 +145,7 @@ async function loadCharacters() {
         if (!map.has(ch.id)) {
           map.set(ch.id, {
             id: ch.id, name: ch.name, russian: ch.russian,
-            image: ch.image?.original ? 'https://shikimori.one' + ch.image.original : null,
+            image: ch.image?.original ? 'https://shikimori.io' + ch.image.original : null,
             url: ch.url ? 'https://shikimori.one'+ch.url : null,
             role: role.role,
             actors: (role.persons||[]).map(p => ({id:p.id, name:p.name, russian:p.russian}))
