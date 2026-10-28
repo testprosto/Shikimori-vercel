@@ -1,21 +1,19 @@
 from http.server import BaseHTTPRequestHandler
 import urllib.request
+import urllib.error
 import json
-import os
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        # Извлекаем путь к Shikimori. Vercel может передать путь как /api/shiki/... или просто /...
         path = self.path
         if path.startswith('/api/shiki'):
             target_path = path.replace('/api/shiki', '')
         else:
             target_path = path
 
-        url = 'https://shikimori.one/api' + target_path
+        url = 'https://shikimori.io/api' + target_path
 
         req = urllib.request.Request(url)
-        # Обязательный User-Agent для Shikimori
         req.add_header('User-Agent', 'MyAnimeApp/1.0 (contact@example.com)')
 
         try:
