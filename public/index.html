@@ -67,7 +67,6 @@ const SHIKI_IMG = "https://shikimori.io";
 let currentAnime = null;
 let allCharacters = [];
 
-// Кэш для запасных картинок, чтобы не дёргать Jikan повторно
 const jikanCache = new Map();
 
 async function apiGet(path, params = {}) {
@@ -78,11 +77,9 @@ async function apiGet(path, params = {}) {
   return resp.json();
 }
 
-// Запасной источник картинок через Jikan (MyAnimeList)
 async function getFallbackImage(name) {
   if (!name) return null;
   if (jikanCache.has(name)) return jikanCache.get(name);
-  
   try {
     const resp = await fetch(`https://api.jikan.moe/v4/characters?q=${encodeURIComponent(name)}&limit=1`);
     if (!resp.ok) throw new Error('Jikan error');
@@ -97,6 +94,16 @@ async function getFallbackImage(name) {
     jikanCache.set(name, null);
     return null;
   }
+}
+
+// Отсеиваем заглушки Shikimori (404 с девушкой)
+function isRealShikimoriImage(url) {
+  if (!url) return false;
+  if (url.includes('/assets/globals/')) return false;
+  if (url.includes('missing_')) return false;
+  if (url.includes('404')) return false;
+  if (!url.includes('/system/')) return false;
+  return true;
 }
 
 async function searchAnime() {
@@ -225,13 +232,12 @@ function renderCharacters() {
     imgWrap.className = 'char-img-wrap';
     imgWrap.innerHTML = `<div class="char-placeholder">${initial}</div>`;
     
-    if (c.image) {
+    if (c.image && isRealShikimoriImage(c.image)) {
       const img = document.createElement('img');
       img.src = c.image;
       img.alt = '';
       img.loading = 'lazy';
       img.onerror = async function() {
-        // Картинка Shikimori не загрузилась — пробуем Jikan
         const fallback = await getFallbackImage(charName);
         if (fallback) {
           this.src = fallback;
@@ -246,13 +252,16 @@ function renderCharacters() {
       };
       imgWrap.innerHTML = '';
       imgWrap.appendChild(img);
-    } else if (charName) {
-      // Картинки от Shikimori нет — сразу пробуем Jikan
+    } else {
       getFallbackImage(charName).then(url => {
         if (url) {
           const img = document.createElement('img');
           img.src = url;
           img.alt = '';
+          img.onerror = function() {
+            this.style.display = 'none';
+            imgWrap.innerHTML = `<div class="char-placeholder">${initial}</div>`;
+          };
           imgWrap.innerHTML = '';
           imgWrap.appendChild(img);
         }
