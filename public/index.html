@@ -61,6 +61,7 @@ button:disabled{background:#999}
 
 <script>
 const SHIKI = "/api/shiki";
+const SHIKI_IMG = "https://shikimori.io";
 let currentAnime = null;
 let allCharacters = [];
 
@@ -90,7 +91,7 @@ async function searchAnime() {
       const card = document.createElement('div');
       card.className = 'anime-card';
       card.onclick = () => selectAnime(anime, card);
-      const imgSrc = anime.image?.original ? 'https://shikimori.io' + anime.image.original : '';
+      const imgSrc = anime.image?.original ? SHIKI_IMG + anime.image.original : '';
       card.innerHTML = `
         <img src="${imgSrc}" alt="">
         <h3>${anime.russian || anime.name}</h3>
@@ -145,8 +146,8 @@ async function loadCharacters() {
         if (!map.has(ch.id)) {
           map.set(ch.id, {
             id: ch.id, name: ch.name, russian: ch.russian,
-            image: ch.image?.original ? 'https://shikimori.io' + ch.image.original : null,
-            url: ch.url ? 'https://shikimori.io'+ch.url : null,
+            image: ch.image?.original ? SHIKI_IMG + ch.image.original : null,
+            url: ch.url ? SHIKI_IMG + ch.url : null,
             role: role.role,
             actors: (role.persons||[]).map(p => ({id:p.id, name:p.name, russian:p.russian}))
           });
