@@ -12,7 +12,7 @@ class handler(BaseHTTPRequestHandler):
         else:
             target_path = path
 
-        url = 'https://shikimori.one/api' + target_path
+        url = 'https://shikimori.io/api' + target_path
 
         req = urllib.request.Request(url)
         # Обязательный User-Agent для Shikimori
