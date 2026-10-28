@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Shikimori Finder (HTML)</title>
+<style>
+body{font-family:system-ui;background:#f4f4f9;padding:20px;max-width:1200px;margin:0 auto}
+.search-box{display:flex;gap:10px;margin-bottom:15px}
+input{flex:1;padding:10px;border:1px solid #ccc;border-radius:6px}
+button{padding:10px 20px;background:#2b2b2b;color:#fff;border:none;border-radius:6px;cursor:pointer}
+button:disabled{background:#999}
+.anime-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:15px}
+.anime-card{background:#fff;padding:10px;border-radius:8px;cursor:pointer;box-shadow:0 2px 5px rgba(0,0,0,.1)}
+.anime-card.selected{outline:3px solid #2b2b2b}
+.anime-card img{width:100%;height:250px;object-fit:cover;border-radius:4px;background:#ddd}
+.anime-card h3{font-size:13px;margin:8px 0 4px}
+.anime-card p{font-size:11px;color:#666;margin:2px 0}
+.characters-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:15px;margin-top:20px}
+.char-card{background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 5px rgba(0,0,0,.1)}
+.char-card img{width:100%;height:200px;object-fit:cover;background:#ddd}
+.char-info{padding:10px}
+.char-name{font-weight:bold;font-size:14px}
+.char-role{font-size:12px;color:#d9534f;margin:4px 0;font-weight:600}
+.error{color:#d9534f;background:#fdd;padding:10px;border-radius:6px;margin:10px 0}
+.hidden{display:none!important}
+.badge{background:#eee;padding:2px 6px;border-radius:4px;font-size:11px}
+.loader{border:4px solid #f3f3f3;border-top:4px solid #2b2b2b;border-radius:50%;width:22px;height:22px;animation:spin 1s linear infinite;display:inline-block}
+@keyframes spin{100%{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<h1>🔍 Shikimori Finder</h1>
+<div class="search-box">
+<input type="text" id="searchInput" value="The World's Finest Assassin" placeholder="Название аниме...">
+<button id="searchBtn" onclick="searchAnime()">Найти</button>
+</div>
+<div id="error" class="error hidden"></div>
+<div id="animeResults" class="anime-list"></div>
+<div id="characterSection" class="hidden">
+<hr><h2 id="selectedTitle"></h2>
+<div style="margin:15px 0">
+<button id="loadCharsBtn" onclick="loadCharacters()">Загрузить персонажей</button>
+<button id="exportBtn" onclick="exportJSON()" disabled>Экспорт в JSON</button>
+<span id="charCounter" class="badge">0 персонажей</span>
+<input type="text" id="charFilter" placeholder="Фильтр по имени..." style="width:180px;padding:8px;margin-left:10px" oninput="renderCharacters()">
+<select id="roleFilter" onchange="renderCharacters()" style="padding:8px;border-radius:4px">
+<option value="all">Все роли</option>
+<option value="Main">Главные</option>
+<option value="Supporting">Второстепенные</option>
+<option value="Background">Фоновые</option>
+</select>
+</div>
+<div id="charLoader" class="hidden"><span class="loader"></span> Загрузка...</div>
+<div id="charactersGrid" class="characters-grid"></div>
+</div>
+
+<script>
+// Используем cors.lol — бесплатный прокси без ключа
+// ВАЖНО: Shikimori требует User-Agent, но браузер его не даёт установить.
+// cors.lol подставляет свой, что обычно проходит проверку.
+const PROXY = "https://api.cors.lol/?url=";
+const SHIKI = "https://shikimori.one/api";
+let currentAnime = null;
+let allCharacters = [];
+
+async function apiGet(path, params = {}) {
+  const url = new URL(SHIKI + path);
+  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
+  const resp = await fetch(PROXY + encodeURIComponent(url.toString()));
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+async function searchAnime() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) return;
+  const btn = document.getElementById('searchBtn');
+  const err = document.getElementById('error');
+  const res = document.getElementById('animeResults');
+  btn.disabled = true; btn.textContent = 'Поиск...';
+  err.classList.add('hidden'); res.innerHTML = '';
+  document.getElementById('characterSection').classList.add('hidden');
+  try {
+    const data = await apiGet('/animes', { search: q, limit: 10 });
+    if (!data.length) { res.innerHTML = '<p>Ничего не найдено.</p>'; return; }
+    data.forEach(anime => {
+      const card = document.createElement('div');
+      card.className = 'anime-card';
+      card.onclick = () => selectAnime(anime, card);
+      card.innerHTML = `
+        <img src="${anime.image?.original || ''}" alt="">
+        <h3>${anime.russian || anime.name}</h3>
+        <p>${anime.name}</p>
+        <p><span class="badge">${anime.kind||'?'}</span> ${(anime.aired_on||'').slice(0,4)} • ${anime.status||''}</p>`;
+      res.appendChild(card);
+    });
+  } catch(e) {
+    err.textContent = 'Ошибка поиска: ' + e.message + '. Проверьте, что файл открыт через http://localhost, а не file://';
+    err.classList.remove('hidden');
+  } finally { btn.disabled = false; btn.textContent = 'Найти'; }
+}
+
+function selectAnime(anime, card) {
+  currentAnime = anime;
+  document.querySelectorAll('.anime-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  document.getElementById('characterSection').classList.remove('hidden');
+  document.getElementById('selectedTitle').textContent = `Выбрано: ${anime.russian || anime.name} (ID: ${anime.id})`;
+  allCharacters = []; document.getElementById('charactersGrid').innerHTML = '';
+  document.getElementById('charCounter').textContent = '0 персонажей';
+  document.getElementById('exportBtn').disabled = true;
+  document.getElementById('loadCharsBtn').disabled = false;
+}
+
+async function loadCharacters() {
+  if (!currentAnime) return;
+  const btn = document.getElementById('loadCharsBtn');
+  const loader = document.getElementById('charLoader');
+  const grid = document.getElementById('charactersGrid');
+  btn.disabled = true; loader.classList.remove('hidden'); grid.innerHTML = '';
+  const map = new Map(); let page = 1; const limit = 50;
+  try {
+    while (true) {
+      const batch = await apiGet(`/animes/${currentAnime.id}/roles`, { page, limit });
+      if (!Array.isArray(batch) || !batch.length) break;
+      for (const role of batch) {
+        const ch = role.character;
+        if (!ch?.id) continue;
+        if (!map.has(ch.id)) {
+          map.set(ch.id, {
+            id: ch.id, name: ch.name, russian: ch.russian,
+            image: ch.image?.original, url: ch.url ? 'https://shikimori.one'+ch.url : null,
+            role: role.role,
+            actors: (role.persons||[]).map(p => ({id:p.id, name:p.name, russian:p.russian}))
+          });
+        }
+      }
+      if (batch.length < limit) break;
+      page++;
+      if (page > 20) break;
+    }
+    allCharacters = Array.from(map.values());
+    document.getElementById('charCounter').textContent = allCharacters.length + ' персонажей';
+    document.getElementById('exportBtn').disabled = allCharacters.length === 0;
+    renderCharacters();
+  } catch(e) {
+    grid.innerHTML = '<p class="error">Ошибка загрузки: ' + e.message + '</p>';
+  } finally { btn.disabled = false; loader.classList.add('hidden'); }
+}
+
+function renderCharacters() {
+  const grid = document.getElementById('charactersGrid');
+  const q = document.getElementById('charFilter').value.toLowerCase();
+  const role = document.getElementById('roleFilter').value;
+  const list = allCharacters.filter(c => {
+    const nameMatch = (c.russian||'').toLowerCase().includes(q) || (c.name||'').toLowerCase().includes(q);
+    const roleMatch = role === 'all' || c.role === role;
+    return nameMatch && roleMatch;
+  });
+  grid.innerHTML = '';
+  if (!list.length) { grid.innerHTML = '<p>Нет персонажей по фильтру.</p>'; return; }
+  list.slice(0,200).forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'char-card';
+    const actors = c.actors.length ? c.actors.map(a => a.russian||a.name).join(', ') : 'Не указано';
+    card.innerHTML = `
+      <img src="${c.image||''}" alt="" loading="lazy">
+      <div class="char-info">
+        <div class="char-name">${c.russian||c.name||'Не указано'}</div>
+        <div class="char-role">${c.role||'Не указано'}</div>
+        <div style="font-size:11px;color:#666">Сейю: ${actors}</div>
+        ${c.url ? `<a href="${c.url}" target="_blank" style="font-size:12px;color:#2b2b2b">Открыть в Shikimori</a>` : ''}
+      </div>`;
+    grid.appendChild(card);
+  });
+  if (list.length > 200) {
+    const more = document.createElement('p');
+    more.style.gridColumn = '1/-1';
+    more.textContent = `Показаны первые 200 из ${list.length}`;
+    grid.appendChild(more);
+  }
+}
+
+function exportJSON() {
+  if (!currentAnime || !allCharacters.length) return;
+  const data = { anime: { id: currentAnime.id, title: currentAnime.russian||currentAnime.name }, characters: allCharacters };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `shikimori_${currentAnime.id}.json`;
+  a.click();
+}
+</script>
+</body>
+</html>
