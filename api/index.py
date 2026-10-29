@@ -53,5 +53,32 @@ def proxy(subpath):
             headers={'Access-Control-Allow-Origin': '*'}
         )
 
+# Новый эндпоинт для получения артов из Safebooru без CORS проблем
+@app.route('/api/booru', methods=['GET'])
+def proxy_booru():
+    tag = request.args.get('tag', '').lower().replace(' ', '_')
+    if not tag:
+        return Response(json.dumps([]), mimetype='application/json', headers={'Access-Control-Allow-Origin': '*'})
+    
+    target_url = f"https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&limit=15&tags={tag}"
+    req = urllib.request.Request(target_url, headers={'User-Agent': 'ShikimoriFinderApp/2.0'})
+    
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            posts = json.loads(r.read().decode('utf-8'))
+            images = []
+            for p in posts:
+                if 'directory' in p and 'image' in p:
+                    img_url = f"https://safebooru.org/images/{p['directory']}/{p['image']}"
+                    images.append(img_url)
+                elif 'file_url' in p:
+                    url = p['file_url']
+                    if url.startswith('//'):
+                        url = 'https:' + url
+                    images.append(url)
+            return Response(json.dumps(images), mimetype='application/json', headers={'Access-Control-Allow-Origin': '*'})
+    except Exception as e:
+        return Response(json.dumps([]), mimetype='application/json', headers={'Access-Control-Allow-Origin': '*'})
+
 if __name__ == '__main__':
     app.run()
