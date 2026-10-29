@@ -74,9 +74,9 @@
     <div class="modal-description" id="modalDesc">Загрузка описания...</div>
     
     <div class="references-section">
-      <h3>Официальные референсы и базы артов (прокрутите вправо ➔)</h3>
+      <h3>Референсы и арты (прокрутите вправо ➔)</h3>
       <div id="modalRefs" class="refs-scroll-container">
-        <span style="font-size: 12px; color: var(--text-muted);">Загрузка изображений...</span>
+        <span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>
       </div>
     </div>
   </div>
@@ -346,8 +346,8 @@ async function openCharacterDetails(char) {
   const cleanUrl = char.url ? (char.url.startsWith('http') ? char.url : `https://shikimori.io${char.url}`) : '#';
   modalLink.href = cleanUrl;
 
-  modalDesc.textContent = 'Загрузка описания и данных...';
-  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов с API...</span>';
+  modalDesc.textContent = 'Загрузка описания...';
+  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>';
   
   modal.classList.remove('hidden');
 
@@ -362,102 +362,53 @@ async function openCharacterDetails(char) {
     }
   `;
 
-  let charNameEn = char.name || '';
-  let charNameRu = char.russian || '';
-
   try {
     const data = await fetchGraphQL(query, { id: String(char.id) });
     const details = data.characters && data.characters[0];
 
     if (details) {
-      if (details.name) charNameEn = details.name;
-      if (details.russian) charNameRu = details.russian;
-
       let desc = details.description || 'Описание отсутствует.';
+      
       desc = desc.replace(/\[character=(\d+)\](.*?)\[\/character\]/g, (match, id, name) => {
         return `<a href="https://shikimori.io/characters/${id}" target="_blank" style="color: #818cf8; text-decoration: underline;">${name}</a>`;
       });
       desc = desc.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/g, '<span style="background: #334155; padding: 2px 6px; border-radius: 4px;">$1</span>');
+
       modalDesc.innerHTML = desc.replace(/\n/g, '<br>');
       
       modalRefs.innerHTML = '';
-
-      // 1. Официальный постер Shikimori
+      
       const posterUrl = details.poster?.originalUrl;
       if (posterUrl) {
-        appendCard(modalRefs, getValidImageUrl(posterUrl), 'Shikimori', 'Официальный постер');
+        const validPoster = getValidImageUrl(posterUrl);
+        modalRefs.innerHTML += `
+          <div class="ref-item" title="Основной постер">
+            <img src="${validPoster}" alt="poster" loading="lazy" onclick="window.open('${validPoster}', '_blank')">
+          </div>`;
       }
 
-      // 2. Портрет из роли
       if (char.image && char.image !== MISSING_IMG) {
-        appendCard(modalRefs, char.image, 'Shikimori Role', 'Портрет');
+        modalRefs.innerHTML += `
+          <div class="ref-item" title="Портрет">
+            <img src="${char.image}" alt="portrait" loading="lazy" onclick="window.open('${char.image}', '_blank')">
+          </div>`;
       }
+
+      const charName = details.russian || details.name;
+      modalRefs.innerHTML += `
+        <div class="ref-item" title="Искать больше в Яндекс Картинках" onclick="window.open('https://yandex.ru/images/search?text=${encodeURIComponent(charName + ' арт')}', '_blank')" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111827; text-align:center; padding:5px;">
+          <span style="font-size:18px;">🔍</span>
+          <span style="font-size:9px; color:#818cf8; margin-top:4px;">Ещё в Яндекс ↗</span>
+        </div>`;
+
+    } else {
+      modalDesc.textContent = 'Не удалось загрузить подробную информацию.';
+      modalRefs.innerHTML = '';
     }
   } catch(e) {
-    modalDesc.textContent = 'Ошибка загрузки описания';
+    modalDesc.textContent = 'Ошибка загрузки: ' + e.message;
+    modalRefs.innerHTML = '';
   }
-
-  // 3. Подтягиваем картинку через Jikan API (MyAnimeList)
-  fetch(`/api/shiki?url=${encodeURIComponent('https://api.jikan.moe/v4/characters?q=' + encodeURIComponent(charNameEn))}`)
-    .then(res => res.json())
-    .then(json => {
-      if (json.data && json.data.length > 0) {
-        const malChar = json.data[0];
-        const imageUrl = malChar.images?.jpg?.image_url;
-        if (imageUrl) {
-          appendCard(modalRefs, imageUrl, 'MyAnimeList (Jikan)', 'MAL Арт');
-        }
-      }
-    }).catch(() => {});
-
-  // 4. Добавляем интерактивные карточки-ссылки на базы артов с авто-поиском по имени персонажа
-  const searchName = encodeURIComponent(charNameEn);
-  
-  appendSearchCard(modalRefs, 'https://danbooru.donmai.us/posts?tags=' + searchName, 'Danbooru', '#004080', '📦 Danbooru Арты');
-  appendSearchCard(modalRefs, 'https://safebooru.org/index.php?page=post&s=list&tags=' + searchName, 'Safebooru', '#2d6a4f', '🛡️ Safebooru');
-  appendSearchCard(modalRefs, 'https://yande.re/post?tags=' + searchName, 'Yande.re', '#8b0000', '🌸 Yande.re');
-  appendSearchCard(modalRefs, 'https://www.pinterest.com/search/pins/?q=' + searchName + ' anime', 'Pinterest', '#e60023', 'ピン Pinterest');
-  appendSearchCard(modalRefs, 'https://yandex.ru/images/search?text=' + encodeURIComponent(charNameRu + ' арт'), 'Yandex Images', '#fc3f1d', '🔍 Яндекс Картинки');
-}
-
-// Вспомогательная функция для добавления картинки-референса
-function appendCard(container, imgUrl, siteName, badgeText) {
-  if (container.querySelector('span')) {
-    container.innerHTML = '';
-  }
-
-  const card = document.createElement('div');
-  card.className = 'ref-item';
-  card.style.position = 'relative';
-  card.title = `${badgeText} (${siteName})`;
-
-  card.innerHTML = `
-    <img src="${imgUrl}" alt="${siteName}" loading="lazy" onclick="window.open('${imgUrl}', '_blank')">
-    <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.88); font-size: 9px; text-align: center; color: #818cf8; padding: 3px; font-weight: 600; border-top: 1px solid var(--border);">
-      ${badgeText}
-    </div>
-  `;
-  container.appendChild(card);
-}
-
-// Вспомогательная функция для добавления карточки быстрого перехода на внешние сайты с артами
-function appendSearchCard(container, url, siteName, bgColor, label) {
-  if (container.querySelector('span')) {
-    container.innerHTML = '';
-  }
-
-  const card = document.createElement('div');
-  card.className = 'ref-item';
-  card.style.cssText = `cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; background:${bgColor}; text-align:center; padding:8px; border-radius:6px;`;
-  card.title = `Открыть поиск на ${siteName}`;
-  card.onclick = () => window.open(url, '_blank');
-
-  card.innerHTML = `
-    <span style="font-size:16px; margin-bottom: 4px;">🌐</span>
-    <span style="font-size:10px; color:#fff; font-weight:600; line-height:1.2;">${label}</span>
-    <span style="font-size:8px; color:#cbd5e1; margin-top:4px;">На сайт ↗</span>
-  `;
-  container.appendChild(card);
 }
 
 function closeModal(e) {
