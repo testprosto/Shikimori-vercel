@@ -82,7 +82,7 @@ async function fetchGraphQL(query, variables = {}) {
   try {
     result = JSON.parse(text);
   } catch (e) {
-    throw new Error(`Сервер вернул не JSON (Возможно, ошибка Vercel): ${text.substring(0, 100)}`);
+    throw new Error(`Сервер вернул не JSON (Ошибка Vercel): ${text.substring(0, 100)}`);
   }
 
   if (result.errors) throw new Error(result.errors[0].message);
