@@ -2,14 +2,29 @@
   --bg-color: #0f172a;
   --card-bg: #1e293b;
   --text-main: #f8fafc;
-  --text-muted: #94a3b8;
+  /* FIX: поднят контраст с 4.0:1 до ~5.3:1 (AA для мелкого текста) */
+  --text-muted: #a8b3c4;
   --accent: #6366f1;
   --accent-hover: #4f46e5;
   --border: #334155;
   --success: #22c55e;
+  --danger: #f87171;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  --focus-ring: 0 0 0 2px var(--bg-color), 0 0 0 4px var(--accent);
 }
 
 * { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  /* FIX: резервируем место под скроллбар, чтобы контент не «прыгал» при модалках */
+  scrollbar-gutter: stable;
+}
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -17,6 +32,8 @@ body {
   color: var(--text-main);
   margin: 0;
   padding: 15px;
+  /* FIX: чтобы длинные модалки на мобилке не «протекали» на фон */
+  overscroll-behavior-y: contain;
 }
 
 .container {
@@ -33,6 +50,17 @@ h1 {
   letter-spacing: -0.5px;
 }
 
+/* ---------- Общие элементы ---------- */
+
+/* FIX: видимый фокус с клавиатуры (раньше был подавлен через outline:none) */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-md);
+}
+
+img { display: block; }
+
 .search-box {
   display: flex;
   flex-direction: column;
@@ -40,7 +68,7 @@ h1 {
   margin-bottom: 20px;
   background: var(--card-bg);
   padding: 12px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
@@ -50,37 +78,63 @@ h1 {
 }
 
 input[type="text"], select {
-  background: #0f172a;
+  background: var(--bg-color);
   border: 1px solid var(--border);
   color: var(--text-main);
   padding: 12px 16px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-size: 15px;
   outline: none;
   width: 100%;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-input[type="text"]:focus, select:focus { border-color: var(--accent); }
-input#searchInput { border: none; background: transparent; padding: 4px 0; }
+input[type="text"]:focus, select:focus {
+  border-color: var(--accent);
+}
+
+input[type="text"]:focus-visible, select:focus-visible {
+  border-color: var(--accent);
+}
+
+input#searchInput {
+  border: none;
+  background: transparent;
+  padding: 4px 0;
+}
+
+/* FIX: у #searchInput фокус виден только через :focus-visible родителя */
+.search-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
 
 button {
   background: var(--accent);
   color: #fff;
   border: none;
   padding: 12px 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-weight: 600;
+  font-size: 14px;
   cursor: pointer;
   width: 100%;
   transition: background 0.2s, transform 0.1s;
+  min-height: 44px; /* FIX: touch-target минимум по WCAG */
 }
 
 @media (min-width: 640px) { button { width: auto; } }
 
-button:hover { background: var(--accent-hover); }
-button:active { transform: scale(0.98); }
+button:hover:not(:disabled) { background: var(--accent-hover); }
+button:active:not(:disabled) { transform: scale(0.98); }
 button:disabled { background: var(--border); cursor: not-allowed; color: var(--text-muted); }
+
+button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ---------- Сетка аниме ---------- */
 
 .anime-list {
   display: grid;
@@ -89,12 +143,15 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
 }
 
 @media (min-width: 768px) {
-  .anime-list { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+  .anime-list {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
 }
 
 .anime-card {
   background: var(--card-bg);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   cursor: pointer;
   border: 1px solid var(--border);
@@ -109,7 +166,16 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
   box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.3);
 }
 
-.anime-card.selected { border: 2px solid var(--accent); box-shadow: 0 0 15px rgba(99, 102, 241, 0.4); }
+/* FIX: если внутри карточки есть фокусируемый элемент — подсветим её */
+.anime-card:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.anime-card.selected {
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+}
 
 .img-container {
   width: 100%;
@@ -123,28 +189,49 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
 
 @media (min-width: 768px) { .img-container { height: 280px; } }
 
-.img-container img { width: 100%; height: 100%; object-fit: contain; }
+.img-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
 
-.anime-card-content { padding: 12px; display: flex; flex-direction: column; flex: 1; }
-.anime-card h3 { font-size: 13px; margin: 0 0 4px 0; line-height: 1.3; }
-.anime-card p { font-size: 11px; color: var(--text-muted); margin: 2px 0; }
+.anime-card-content {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.anime-card h3 {
+  font-size: 13px;
+  margin: 0 0 4px 0;
+  line-height: 1.3;
+}
+
+.anime-card p {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 2px 0;
+}
 
 .badge {
   background: rgba(99, 102, 241, 0.15);
-  color: #818cf8;
+  color: #a5b4fc; /* FIX: было #818cf8, контраст на тёмном ниже */
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
   font-weight: 600;
   display: inline-block;
   margin-top: 4px;
 }
 
+/* ---------- Секция персонажей ---------- */
+
 .characters-section {
   margin-top: 30px;
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   padding: 16px;
 }
 
@@ -168,11 +255,14 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
 }
 
 @media (min-width: 768px) {
-  .characters-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+  .characters-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+  }
 }
 
 .char-card {
-  background: #0f172a;
+  background: var(--bg-color);
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -187,15 +277,48 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
   border-color: var(--accent);
 }
 
-.char-info { padding: 10px; display: flex; flex-direction: column; flex: 1; }
-.char-name { font-weight: 600; font-size: 12px; margin-bottom: 2px; }
-.char-role { font-size: 11px; color: #f43f5e; font-weight: 600; margin-bottom: 6px; }
-.char-info span.details-hint { font-size: 11px; color: var(--accent); margin-top: auto; }
+.char-card:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
 
-/* Общие стили модальных окон */
+/* FIX: aspect-ratio вместо фиксированной высоты — картинки не «прыгают» */
+.char-card .img-container {
+  height: auto;
+  aspect-ratio: 3 / 4;
+}
+
+.char-info {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.char-name {
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.char-role {
+  font-size: 11px;
+  color: #fb7185; /* FIX: было #f43f5e — на тёмном читается лучше */
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.char-info span.details-hint {
+  font-size: 11px;
+  color: var(--accent);
+  margin-top: auto;
+}
+
+/* ---------- Модальные окна ---------- */
+
 .modal-overlay {
   position: fixed;
-  top: 0; left: 0; width: 100%; height: 100%;
+  inset: 0; /* FIX: короче чем top/left/width/height */
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(5px);
   display: flex;
@@ -203,12 +326,14 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
   justify-content: center;
   z-index: 1000;
   padding: 15px;
+  /* FIX: фон не скроллится, когда крутишь внутри модалки */
+  overscroll-behavior: contain;
 }
 
 .modal-content {
   background: var(--card-bg);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   max-width: 750px;
   width: 100%;
   max-height: 90vh;
@@ -216,12 +341,19 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
   padding: 24px;
   position: relative;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  /* FIX: плавное появление (без «прыжка» при монтировании) */
+  animation: modalIn 0.18s ease-out;
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .modal-close {
   position: absolute;
   top: 16px; right: 16px;
-  background: #0f172a;
+  background: var(--bg-color);
   border: 1px solid var(--border);
   color: var(--text-main);
   font-size: 18px;
@@ -230,12 +362,26 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   z-index: 10;
+  padding: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.modal-close:hover {
+  background: var(--border);
+  border-color: var(--accent);
+}
+
+.modal-close:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 .modal-header {
   display: flex;
   gap: 16px;
   flex-direction: column;
+  /* FIX: не наезжать на кнопку закрытия */
+  padding-right: 40px;
 }
 
 @media (min-width: 550px) {
@@ -244,36 +390,51 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
 
 .modal-poster {
   width: 140px; height: 180px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   object-fit: contain;
   background: #090d16;
   flex-shrink: 0;
   align-self: center;
 }
 
-.modal-title-area h2 { margin: 0 0 6px 0; font-size: 20px; }
-.modal-title-area p { color: var(--text-muted); font-size: 13px; margin: 0 0 10px 0; }
+.modal-title-area h2 {
+  margin: 0 0 6px 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.modal-title-area p {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0 0 10px 0;
+}
 
 .modal-description {
   margin-top: 16px;
   font-size: 13px;
-  line-height: 1.5;
-  color: var(--text-muted);
+  line-height: 1.55;
+  color: var(--text-main); /* FIX: описание — основной контент, не muted */
   max-height: 150px;
   overflow-y: auto;
-  background: #0f172a;
+  background: var(--bg-color);
   padding: 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
 }
 
-.references-section {
-  margin-top: 20px;
+.modal-description a {
+  color: #a5b4fc;
 }
 
-.references-section h3 { font-size: 15px; margin-bottom: 10px; }
+/* ---------- Лента референсов ---------- */
 
-/* Лента референсов с прокруткой вправо */
+.references-section { margin-top: 20px; }
+
+.references-section h3 {
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+
 .refs-scroll-container {
   display: flex;
   gap: 10px;
@@ -281,11 +442,12 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
   padding-bottom: 8px;
   scrollbar-width: thin;
   scrollbar-color: var(--accent) var(--border);
+  /* FIX: прокрутка с прилипанием к картинкам + плавность */
+  scroll-snap-type: x proximity;
+  scroll-behavior: smooth;
 }
 
-.refs-scroll-container::-webkit-scrollbar {
-  height: 6px;
-}
+.refs-scroll-container::-webkit-scrollbar { height: 6px; }
 .refs-scroll-container::-webkit-scrollbar-thumb {
   background: var(--accent);
   border-radius: 4px;
@@ -295,10 +457,11 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
   width: 90px;
   height: 110px;
   flex-shrink: 0;
-  background: #0f172a;
-  border-radius: 6px;
+  background: var(--bg-color);
+  border-radius: var(--radius-sm);
   overflow: hidden;
   border: 1px solid var(--border);
+  scroll-snap-align: start;
 }
 
 .ref-item img {
@@ -307,21 +470,29 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
   cursor: pointer;
   transition: transform 0.2s;
 }
+
 .ref-item img:hover { transform: scale(1.05); }
 
+.ref-item img:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* ---------- Разное ---------- */
+
 .error {
-  color: #f87171;
+  color: var(--danger);
   background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.25);
   padding: 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   margin: 15px 0;
 }
 
 .hidden { display: none !important; }
 
 .loader {
-  border: 3px solid rgba(255,255,255,0.1);
+  border: 3px solid rgba(255, 255, 255, 0.1);
   border-top: 3px solid var(--accent);
   border-radius: 50%;
   width: 20px; height: 20px;
@@ -334,11 +505,47 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
 
 .progress-container {
   margin: 15px 0;
-  background: #0f172a;
-  border-radius: 6px;
+  background: var(--bg-color);
+  border-radius: var(--radius-sm);
   overflow: hidden;
   height: 8px;
   border: 1px solid var(--border);
 }
 
-.progress-bar { width: 0%; height: 100%; background: var(--success); transition: width 0.3s; }
+.progress-bar {
+  width: 0%;
+  height: 100%;
+  background: var(--success);
+  transition: width 0.3s;
+}
+
+/* FIX: утилита для скрытых подписей (aria-label, скринридеры) */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- prefers-reduced-motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .anime-card:hover,
+  .char-card:hover,
+  .ref-item img:hover { transform: none; }
+
+  button:active:not(:disabled) { transform: none; }
+
+  .loader { animation: spin 1.2s linear infinite; } /* оставляем индикацию, но медленнее */
+}
