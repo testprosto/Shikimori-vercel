@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>Shikimori Finder (Vercel)</title>
+<title>Shikimori Finder (Vercel GraphQL)</title>
 <style>
 body{font-family:system-ui;background:#f4f4f9;padding:20px;max-width:1200px;margin:0 auto}
 .search-box{display:flex;gap:10px;margin-bottom:15px}
@@ -50,9 +50,8 @@ button:disabled{background:#999}
 <input type="text" id="charFilter" placeholder="Фильтр по имени..." style="width:180px;padding:8px;margin-left:10px" oninput="renderCharacters()">
 <select id="roleFilter" onchange="renderCharacters()" style="padding:8px;border-radius:4px">
 <option value="all">Все роли</option>
-<option value="Main">Главные</option>
-<option value="Supporting">Второстепенные</option>
-<option value="Background">Фоновые</option>
+<option value="Main">Главные (Main)</option>
+<option value="Supporting">Второстепенные (Supporting)</option>
 </select>
 </div>
 <div id="charLoader" class="hidden"><span class="loader"></span> Загрузка...</div>
@@ -62,17 +61,25 @@ button:disabled{background:#999}
 </div>
 
 <script>
-const SHIKI = "/api/shiki";
-const SHIKI_IMG = "https://shikimori.io";
+const SHIKI_API = "/api/shiki/graphql";
 let currentAnime = null;
 let allCharacters = [];
 
-async function apiGet(path, params = {}) {
-  const url = new URL(SHIKI + path, window.location.origin);
-  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
-  const resp = await fetch(url.toString());
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
+// Функция проверки, является ли ссылка реальным изображением (не заглушкой missing)
+function getValidImageUrl(url) {
+  if (!url || url.includes('missing')) return null;
+  return url;
+}
+
+async function fetchGraphQL(query, variables = {}) {
+  const resp = await fetch(SHIKI_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables })
+  });
+  const result = await resp.json();
+  if (result.errors) throw new Error(result.errors[0].message);
+  return result.data;
 }
 
 async function searchAnime() {
@@ -82,23 +89,48 @@ async function searchAnime() {
   const err = document.getElementById('error');
   const loader = document.getElementById('searchLoader');
   const res = document.getElementById('animeResults');
+
   btn.disabled = true; btn.textContent = 'Поиск...';
   loader.classList.remove('hidden');
   err.classList.add('hidden'); res.innerHTML = '';
   document.getElementById('characterSection').classList.add('hidden');
+
+  const query = `
+    query($search: String) {
+      animes(search: $search, limit: 10) {
+        id
+        name
+        russian
+        kind
+        status
+        airedOn { year }
+        poster { originalUrl }
+      }
+    }
+  `;
+
   try {
-    const data = await apiGet('/animes', { search: q, limit: 10 });
-    if (!data.length) { res.innerHTML = '<p>Ничего не найдено.</p>'; return; }
-    data.forEach(anime => {
+    const data = await fetchGraphQL(query, { search: q });
+    const animes = data.animes || [];
+    if (!animes.length) { res.innerHTML = '<p>Ничего не найдено.</p>'; return; }
+
+    animes.forEach(anime => {
       const card = document.createElement('div');
       card.className = 'anime-card';
       card.onclick = () => selectAnime(anime, card);
-      const imgSrc = anime.image?.original ? SHIKI_IMG + anime.image.original : '';
+      
+      const imgSrc = getValidImageUrl(anime.poster?.originalUrl);
+      const initial = (anime.russian || anime.name || '?').charAt(0).toUpperCase();
+
+      const imgHtml = imgSrc 
+        ? `<img src="${imgSrc}" alt="" onerror="this.parentElement.innerHTML='<div class=\\'char-placeholder\\'>${initial}</div>'">`
+        : `<div class="char-img-wrap" style="height:250px;"><div class="char-placeholder">${initial}</div></div>`;
+
       card.innerHTML = `
-        <img src="${imgSrc}" alt="" onerror="this.style.display='none'">
+        ${imgHtml}
         <h3>${anime.russian || anime.name}</h3>
         <p>${anime.name}</p>
-        <p><span class="badge">${anime.kind||'?'}</span> ${(anime.aired_on||'').slice(0,4)} • ${anime.status||''}</p>`;
+        <p><span class="badge">${anime.kind || '?'}</span> ${anime.airedOn?.year || ''} • ${anime.status || ''}</p>`;
       res.appendChild(card);
     });
   } catch(e) {
@@ -135,67 +167,91 @@ async function loadCharacters() {
   btn.disabled = true; loader.classList.remove('hidden'); grid.innerHTML = '';
   progressBar.style.width = '0%'; progressText.textContent = 'Загрузка...';
 
-  const map = new Map(); let page = 1; const limit = 50; let hasMore = true;
-
-  try {
-    while (hasMore) {
-      const batch = await apiGet(`/animes/${currentAnime.id}/roles`, { page, limit });
-      if (!Array.isArray(batch) || !batch.length) { hasMore = false; break; }
-      
-      for (const role of batch) {
-        const ch = role.character;
-        if (!ch?.id) continue;
-        if (!map.has(ch.id)) {
-          map.set(ch.id, {
-            id: ch.id, name: ch.name, russian: ch.russian,
-            image: ch.image?.original ? SHIKI_IMG + ch.image.original : null,
-            url: ch.url ? SHIKI_IMG + ch.url : null,
-            role: role.role,
-            actors: (role.persons||[]).map(p => ({id:p.id, name:p.name, russian:p.russian}))
-          });
+  const query = `
+    query($id: String!) {
+      animes(ids: $id) {
+        characterRoles {
+          rolesEn
+          rolesRu
+          character {
+            id
+            name
+            russian
+            url
+            poster { originalUrl }
+          }
+          person {
+            id
+            name
+            russian
+          }
         }
       }
-      
-      const progress = Math.min(90, page * 10);
-      progressBar.style.width = progress + '%';
-      progressText.textContent = `Страница ${page}: ${map.size} персонажей`;
-
-      if (batch.length < limit) hasMore = false;
-      else { page++; if (page > 20) hasMore = false; }
     }
-    
+  `;
+
+  try {
+    const data = await fetchGraphQL(query, { id: String(currentAnime.id) });
+    const roles = data.animes[0]?.characterRoles || [];
+
+    const map = new Map();
+    for (const item of roles) {
+      const ch = item.character;
+      if (!ch || !ch.id) continue;
+      
+      const roleName = item.rolesEn ? item.rolesEn[0] : (item.rolesRu ? item.rolesRu[0] : 'Main');
+      const actor = item.person ? { id: item.person.id, name: item.person.name, russian: item.person.russian } : null;
+
+      if (!map.has(ch.id)) {
+        map.set(ch.id, {
+          id: ch.id,
+          name: ch.name,
+          russian: ch.russian,
+          image: getValidImageUrl(ch.poster?.originalUrl),
+          url: ch.url,
+          role: roleName,
+          actors: actor ? [actor] : []
+        });
+      } else if (actor) {
+        map.get(ch.id).actors.push(actor);
+      }
+    }
+
     allCharacters = Array.from(map.values());
     document.getElementById('charCounter').textContent = allCharacters.length + ' персонажей';
     document.getElementById('exportBtn').disabled = allCharacters.length === 0;
-    renderCharacters();
     
+    renderCharacters();
     progressBar.style.width = '100%';
     progressText.textContent = `Готово: ${allCharacters.length} персонажей`;
   } catch(e) {
     grid.innerHTML = '<p class="error">Ошибка загрузки: ' + e.message + '</p>';
     progressText.textContent = 'Ошибка';
-  } finally { btn.disabled = false; loader.classList.add('hidden'); }
+  } finally { 
+    btn.disabled = false; loader.classList.add('hidden'); 
+  }
 }
 
 function renderCharacters() {
   const grid = document.getElementById('charactersGrid');
   const q = document.getElementById('charFilter').value.toLowerCase();
   const role = document.getElementById('roleFilter').value;
+  
   const list = allCharacters.filter(c => {
     const nameMatch = (c.russian||'').toLowerCase().includes(q) || (c.name||'').toLowerCase().includes(q);
-    const roleMatch = role === 'all' || c.role === role;
+    const roleMatch = role === 'all' || (c.role && c.role.toLowerCase() === role.toLowerCase());
     return nameMatch && roleMatch;
   });
+
   grid.innerHTML = '';
   if (!list.length) { grid.innerHTML = '<p>Нет персонажей по фильтру.</p>'; return; }
   
-  list.slice(0,200).forEach(c => {
+  list.slice(0, 200).forEach(c => {
     const card = document.createElement('div');
     card.className = 'char-card';
-    const actors = c.actors.length ? c.actors.map(a => a.russian||a.name).join(', ') : 'Не указано';
+    const actors = c.actors.length ? c.actors.map(a => a.russian || a.name).join(', ') : 'Не указано';
     const initial = (c.russian || c.name || '?').charAt(0).toUpperCase();
     
-    // Если картинка есть — показываем её. Если нет или 404 — заглушка с инициалом.
     const imgHtml = c.image 
       ? `<img src="${c.image}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'char-placeholder\\'>${initial}</div>'">`
       : `<div class="char-placeholder">${initial}</div>`;
@@ -203,10 +259,10 @@ function renderCharacters() {
     card.innerHTML = `
       <div class="char-img-wrap">${imgHtml}</div>
       <div class="char-info">
-        <div class="char-name">${c.russian||c.name||'Не указано'}</div>
-        <div class="char-role">${c.role||'Не указано'}</div>
+        <div class="char-name">${c.russian || c.name || 'Не указано'}</div>
+        <div class="char-role">${c.role || 'Не указано'}</div>
         <div style="font-size:11px;color:#666">Сейю: ${actors}</div>
-        ${c.url ? `<a href="${c.url}" target="_blank" style="font-size:12px;color:#2b2b2b">Открыть в Shikimori</a>` : ''}
+        ${c.url ? `<a href="${c.url}" target="_blank" style="font-size:12px;color:#2b2b2b">Открыть на Shikimori</a>` : ''}
       </div>`;
     grid.appendChild(card);
   });
