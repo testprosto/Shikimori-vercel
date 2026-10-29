@@ -174,6 +174,7 @@ async function loadCharacters() {
   btn.disabled = true; loader.classList.remove('hidden'); grid.innerHTML = '';
   progressBar.style.width = '0%'; progressText.textContent = 'Загрузка...';
 
+  // Убираем несуществующее поле person из GraphQL-запроса
   const query = `
     query($id: String!) {
       animes(ids: $id) {
@@ -186,11 +187,6 @@ async function loadCharacters() {
             russian
             url
             poster { originalUrl }
-          }
-          person {
-            id
-            name
-            russian
           }
         }
       }
@@ -207,7 +203,6 @@ async function loadCharacters() {
       if (!ch || !ch.id) continue;
       
       const roleName = item.rolesEn ? item.rolesEn[0] : (item.rolesRu ? item.rolesRu[0] : 'Main');
-      const actor = item.person ? { id: item.person.id, name: item.person.name, russian: item.person.russian } : null;
 
       if (!map.has(ch.id)) {
         map.set(ch.id, {
@@ -217,10 +212,8 @@ async function loadCharacters() {
           image: getValidImageUrl(ch.poster?.originalUrl),
           url: ch.url,
           role: roleName,
-          actors: actor ? [actor] : []
+          actors: []
         });
-      } else if (actor) {
-        map.get(ch.id).actors.push(actor);
       }
     }
 
@@ -256,7 +249,6 @@ function renderCharacters() {
   list.slice(0, 200).forEach(c => {
     const card = document.createElement('div');
     card.className = 'char-card';
-    const actors = c.actors.length ? c.actors.map(a => a.russian || a.name).join(', ') : 'Не указано';
     const initial = (c.russian || c.name || '?').charAt(0).toUpperCase();
     
     const imgHtml = c.image 
@@ -268,7 +260,6 @@ function renderCharacters() {
       <div class="char-info">
         <div class="char-name">${c.russian || c.name || 'Не указано'}</div>
         <div class="char-role">${c.role || 'Не указано'}</div>
-        <div style="font-size:11px;color:#666">Сейю: ${actors}</div>
         ${c.url ? `<a href="${c.url}" target="_blank" style="font-size:12px;color:#2b2b2b">Открыть на Shikimori</a>` : ''}
       </div>`;
     grid.appendChild(card);
