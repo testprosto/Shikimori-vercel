@@ -7,37 +7,33 @@ app = Flask(__name__)
 
 @app.route('/api/shiki/<path:subpath>', methods=['GET', 'POST', 'OPTIONS'])
 @app.route('/api/shiki', defaults={'subpath': ''}, methods=['GET', 'POST', 'OPTIONS'])
-def shiki_proxy(subpath):
+def proxy(subpath):
     if request.method == 'OPTIONS':
-        return cors_response()
+        response = Response()
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS, '
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
 
-    if subpath == 'graphql' or subpath.startswith('graphql'):
-        target_url = 'https://shikimori.io/api/graphql'
+    # Проксирование внешних API по параметру ?url=
+    external_url = request.args.get('url')
+    if external_url:
+        target_url = external_url
     else:
-        target_url = 'https://shikimori.io/api'
-        if subpath:
-            target_url += '/' + subpath
+        if subpath == 'graphql' or subpath.startswith('graphql'):
+            target_url = 'https://shikimori.io/api/graphql'
+        else:
+            target_url = 'https://shikimori.io/api'
+            if subpath:
+                target_url += '/' + subpath
 
-    return make_proxy_request(target_url, request)
+    data = None
+    if request.method == 'POST':
+        data = request.get_data()
 
-@app.route('/api/proxy_external', methods=['GET', 'OPTIONS'])
-def external_proxy():
-    if request.method == 'OPTIONS':
-        return cors_response()
-    
-    target_url = request.args.get('url')
-    if not target_url:
-        return Response(json.dumps({'error': 'Missing url parameter'}), status=400, mimetype='application/json')
-
-    return make_proxy_request(target_url, request, is_external=True)
-
-def make_proxy_request(target_url, req_obj, is_external=False):
-    data = req_obj.get_data() if req_obj.method == 'POST' else None
-    req = urllib.request.Request(target_url, data=data, method=req_obj.method)
-    
-    # User-Agent обязателен для боору-сайтов и Shikimori
-    req.add_header('User-Agent', 'ShikimoriFinderApp/3.0 (contact@example.com)')
-    if req_obj.method == 'POST':
+    req = urllib.request.Request(target_url, data=data, method=request.method)
+    req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+    if request.method == 'POST':
         req.add_header('Content-Type', 'application/json')
 
     try:
@@ -61,13 +57,6 @@ def make_proxy_request(target_url, req_obj, is_external=False):
             mimetype='application/json',
             headers={'Access-Control-Allow-Origin': '*'}
         )
-
-def cors_response():
-    response = Response()
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-    return response
 
 if __name__ == '__main__':
     app.run()
