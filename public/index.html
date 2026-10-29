@@ -58,7 +58,7 @@
   </div>
 </div>
 
-<!-- Модальное окно с деталями персонажа и кнопками источников артов -->
+<!-- Модальное окно с деталями персонажа и лентой референсов с разных сайтов -->
 <div id="charModal" class="modal-overlay hidden" onclick="closeModal(event)">
   <div class="modal-content" onclick="event.stopPropagation()">
     <button class="modal-close" onclick="closeModal()">×</button>
@@ -74,9 +74,9 @@
     <div class="modal-description" id="modalDesc">Загрузка описания...</div>
     
     <div class="references-section">
-      <h3>Источники артов и референсов</h3>
+      <h3>Мульти-источники референсов (прокрутите вправо ➔)</h3>
       <div id="modalRefs" class="refs-scroll-container">
-        <span style="font-size: 12px; color: var(--text-muted);">Загрузка...</span>
+        <span style="font-size: 12px; color: var(--text-muted);">Загрузка картинок с API разных сайтов...</span>
       </div>
     </div>
   </div>
@@ -101,6 +101,7 @@ async function fetchGraphQL(query, variables = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, variables })
   });
+
   const text = await resp.text();
   let result;
   try {
@@ -108,6 +109,7 @@ async function fetchGraphQL(query, variables = {}) {
   } catch (e) {
     throw new Error(`Сервер вернул не JSON: ${text.substring(0, 100)}`);
   }
+
   if (result.errors) throw new Error(result.errors[0].message);
   return result.data;
 }
@@ -344,26 +346,34 @@ async function openCharacterDetails(char) {
   const cleanUrl = char.url ? (char.url.startsWith('http') ? char.url : `https://shikimori.io${char.url}`) : '#';
   modalLink.href = cleanUrl;
 
-  modalDesc.textContent = 'Загрузка описания...';
-  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка источников...</span>';
+  modalDesc.textContent = 'Загрузка описания и картинок с внешних API...';
+  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загружаем с Danbooru, Safebooru, Jikan и Shikimori...</span>';
   
   modal.classList.remove('hidden');
 
+  // 1. Получаем описание и постер с Shikimori
   const query = `
     query($id: String!) {
       characters(ids: $id) {
         description
         russian
         name
+        poster { originalUrl }
       }
     }
   `;
+
+  let charNameEn = char.name || '';
+  let charNameRu = char.russian || '';
 
   try {
     const data = await fetchGraphQL(query, { id: String(char.id) });
     const details = data.characters && data.characters[0];
 
     if (details) {
+      if (details.name) charNameEn = details.name;
+      if (details.russian) charNameRu = details.russian;
+
       let desc = details.description || 'Описание отсутствует.';
       desc = desc.replace(/\[character=(\d+)\](.*?)\[\/character\]/g, (match, id, name) => {
         return `<a href="https://shikimori.io/characters/${id}" target="_blank" style="color: #818cf8; text-decoration: underline;">${name}</a>`;
@@ -372,34 +382,85 @@ async function openCharacterDetails(char) {
       modalDesc.innerHTML = desc.replace(/\n/g, '<br>');
       
       modalRefs.innerHTML = '';
-      
-      const nameRu = details.russian || details.name;
-      const tagEn = (details.name || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
 
-      // Плашки со всеми запрошенными иконками и текстом
-      const platforms = [
-        { name: 'Danbooru ↗', icon: '🎨', url: `https://danbooru.donmai.us/posts?tags=${tagEn}` },
-        { name: 'Gelbooru ↗', icon: '🖼️', url: `https://gelbooru.com/index.php?page=post&s=list&tags=${tagEn}` },
-        { name: 'Yande.re ↗', icon: '✨', url: `https://yande.re/post?tags=${tagEn}` },
-        { name: 'Safebooru ↗', icon: '🌿', url: `https://safebooru.org/index.php?page=post&s=list&tags=${tagEn}` },
-        { name: 'Pinterest ↗', icon: '📌', url: `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(nameRu + ' арт')}` },
-        { name: 'Яндекс Арты ↗', icon: '🔍', url: `https://yandex.ru/images/search?text=${encodeURIComponent(nameRu + ' арт аниме')}` }
-      ];
-
-      platforms.forEach(p => {
-        modalRefs.innerHTML += `
-          <div class="ref-item" onclick="window.open('${p.url}', '_blank')" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111827; border: 1px solid var(--border); text-align:center; padding:8px; border-radius:8px; min-width: 95px; transition: border-color 0.2s, background 0.2s;" onmouseover="this.style.borderColor='#6366f1'" onmouseout="this.style.borderColor='var(--border)'" title="Открыть ${p.name}">
-            <span style="font-size:22px; margin-bottom:4px;">${p.icon}</span>
-            <span style="font-size:11px; color:#818cf8; font-weight:600; white-space:nowrap;">${p.name}</span>
-          </div>`;
-      });
-
-    } else {
-      modalDesc.textContent = 'Не удалось загрузить информацию.';
+      // Добавляем постер Shikimori
+      const posterUrl = details.poster?.originalUrl;
+      if (posterUrl) {
+        const validPoster = getValidImageUrl(posterUrl);
+        appendRefCard(modalRefs, validPoster, 'Shikimori (Постер)');
+      }
     }
   } catch(e) {
-    modalDesc.textContent = 'Ошибка загрузки: ' + e.message;
+    modalDesc.textContent = 'Ошибка загрузки описания';
   }
+
+  // 2. Параллельно запрашиваем картинки с других внешних API через наш прокси
+  const tagQuery = encodeURIComponent(charNameEn.toLowerCase().replace(/\s+/g, '_'));
+
+  // Запрос к Jikan API (MyAnimeList)
+  fetch(`/api/shiki?url=${encodeURIComponent('https://api.jikan.moe/v4/characters?q=' + encodeURIComponent(charNameEn))}`)
+    .then(res => res.json())
+    .then(json => {
+      if (json.data && json.data.length > 0) {
+        const malChar = json.data[0];
+        const imageUrl = malChar.images?.jpg?.image_url;
+        if (imageUrl) {
+          appendRefCard(modalRefs, imageUrl, 'Jikan (MAL)');
+        }
+      }
+    }).catch(() => {});
+
+  // Запрос к Safebooru API
+  fetch(`/api/shiki?url=${encodeURIComponent('https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&limit=5&tags=' + tagQuery)}`)
+    .then(res => res.json())
+    .then(posts => {
+      if (Array.isArray(posts)) {
+        posts.forEach(post => {
+          if (post.file_url) {
+            let imgUrl = post.file_url;
+            if (!imgUrl.startsWith('http')) imgUrl = 'https://safebooru.org/' + imgUrl;
+            appendRefCard(modalRefs, imgUrl, 'Safebooru');
+          }
+        });
+      }
+    }).catch(() => {});
+
+  // Запрос к Danbooru API
+  fetch(`/api/shiki?url=${encodeURIComponent('https://danbooru.donmai.us/posts.json?tags=' + tagQuery + '&limit=5')}`)
+    .then(res => res.json())
+    .then(posts => {
+      if (Array.isArray(posts)) {
+        posts.forEach(post => {
+          const fileUrl = post.large_file_url || post.file_url;
+          if (fileUrl) {
+            let imgUrl = fileUrl;
+            if (!imgUrl.startsWith('http')) imgUrl = 'https://danbooru.donmai.us' + imgUrl;
+            appendRefCard(modalRefs, imgUrl, 'Danbooru');
+          }
+        });
+      }
+    }).catch(() => {});
+}
+
+// Вспомогательная функция для добавления карточки картинки с названием сайта
+function appendRefCard(container, imgUrl, siteName) {
+  // Убираем текст «Загрузка...», если он там был
+  if (container.querySelector('span')) {
+    container.innerHTML = '';
+  }
+
+  const card = document.createElement('div');
+  card.className = 'ref-item';
+  card.style.position = 'relative';
+  card.title = `Источник: ${siteName}`;
+
+  card.innerHTML = `
+    <img src="${imgUrl}" alt="${siteName}" loading="lazy" onclick="window.open('${imgUrl}', '_blank')">
+    <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(15, 23, 42, 0.85); font-size: 9px; text-align: center; color: #818cf8; padding: 2px; font-weight: 600;">
+      ${siteName}
+    </div>
+  `;
+  container.appendChild(card);
 }
 
 function closeModal(e) {
