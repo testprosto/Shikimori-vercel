@@ -318,8 +318,8 @@ async function openCharacterDetails(char) {
   modalName.textContent = char.russian || char.name;
   modalRole.textContent = `Роль: ${char.role}`;
   modalLink.href = char.url ? `https://shikimori.io${char.url}` : '#';
-  modalDesc.textContent = 'Загрузка описания и референсов...';
-  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка...</span>';
+  modalDesc.textContent = 'Загрузка описания...';
+  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка референса...</span>';
   
   modal.classList.remove('hidden');
 
@@ -330,7 +330,6 @@ async function openCharacterDetails(char) {
         russian
         name
         poster { originalUrl }
-        images { originalUrl }
       }
     }
   `;
@@ -342,17 +341,15 @@ async function openCharacterDetails(char) {
     if (details) {
       modalDesc.innerHTML = details.description ? details.description.replace(/\n/g, '<br>') : 'Описание отсутствует.';
       
-      const images = details.images || [];
-      if (images.length > 0) {
+      const posterUrl = details.poster?.originalUrl;
+      if (posterUrl) {
         modalRefs.innerHTML = '';
-        images.forEach(img => {
-          const refDiv = document.createElement('div');
-          refDiv.className = 'ref-item';
-          refDiv.innerHTML = `<img src="${img.originalUrl}" alt="art" loading="lazy" onclick="window.open('${img.originalUrl}', '_blank')">`;
-          modalRefs.appendChild(refDiv);
-        });
+        const refDiv = document.createElement('div');
+        refDiv.className = 'ref-item';
+        refDiv.innerHTML = `<img src="${getValidImageUrl(posterUrl)}" alt="art" loading="lazy" onclick="window.open('${getValidImageUrl(posterUrl)}', '_blank')">`;
+        modalRefs.appendChild(refDiv);
       } else {
-        modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Дополнительные референсы отсутствуют.</span>';
+        modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Референсы отсутствуют.</span>';
       }
     } else {
       modalDesc.textContent = 'Не удалось загрузить подробную информацию.';
