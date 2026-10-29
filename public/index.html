@@ -67,7 +67,7 @@
       <div class="modal-title-area">
         <h2 id="modalName">Имя персонажа</h2>
         <p id="modalRole" style="color: #f43f5e; font-weight:600;"></p>
-        <a id="modalLink" href="" target="_blank" style="font-size: 12px; color: #818cf8; text-decoration: none;">Открыть на Shikimori ↗</a>
+        <a id="modalLink" href="" target="_blank" rel="noopener noreferrer" style="font-size: 12px; color: #818cf8; text-decoration: none;">Открыть на Shikimori ↗</a>
       </div>
     </div>
     
@@ -84,22 +84,49 @@
 
 <script>
 const SHIKI_API = "/api/shiki/graphql";
-const MISSING_IMG = "https://shikimori.io/assets/globals/missing_original.jpg";
+const MISSING_IMG = "missing.jpg"; // FIX: своя локальная заглушка, не зависим от shikimori.io
 
 let currentAnime = null;
-const charactersCache = {};
+// FIX: LRU-кеш вместо бесконечного объекта. Map сохраняет порядок вставки.
+const charactersCache = new Map();
+const CACHE_LIMIT = 50;
 let allCharacters = [];
+
+// FIX: последовательность для защиты от race condition при быстром клике по карточкам.
+let detailsSeq = 0;
+// FIX: AbortController для отмены предыдущего поиска.
+let searchController = null;
+
+// FIX: экранирование HTML — критично, т.к. всё вставляется через innerHTML.
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 function getValidImageUrl(url) {
   if (!url || url.includes('missing')) return MISSING_IMG;
   return url;
 }
 
-async function fetchGraphQL(query, variables = {}) {
+// FIX: обработчик onerror для картинок — ставим заглушку при 404.
+function attachImgFallback(imgEl) {
+  imgEl.addEventListener('error', function handler() {
+    imgEl.removeEventListener('error', handler);
+    imgEl.src = MISSING_IMG;
+  });
+}
+
+async function fetchGraphQL(query, variables = {}, signal = undefined) {
   const resp = await fetch(SHIKI_API, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables })
+    body: JSON.stringify({ query, variables }),
+    signal
   });
 
   const text = await resp.text();
@@ -117,6 +144,12 @@ async function fetchGraphQL(query, variables = {}) {
 async function searchAnime() {
   const q = document.getElementById('searchInput').value.trim();
   if (!q) return;
+
+  // FIX: отменяем предыдущий запрос, если он ещё висит.
+  if (searchController) searchController.abort();
+  searchController = new AbortController();
+  const signal = searchController.signal;
+
   const btn = document.getElementById('searchBtn');
   const err = document.getElementById('error');
   const loader = document.getElementById('searchLoader');
@@ -141,9 +174,12 @@ async function searchAnime() {
   `;
 
   try {
-    const data = await fetchGraphQL(query, { search: q });
+    const data = await fetchGraphQL(query, { search: q }, signal);
     const animes = data.animes || [];
-    if (!animes.length) { res.innerHTML = '<p style="color:var(--text-muted)">Ничего не найдено.</p>'; return; }
+    if (!animes.length) {
+      res.innerHTML = '<p style="color:var(--text-muted)">Ничего не найдено.</p>';
+      return;
+    }
 
     animes.forEach(anime => {
       const card = document.createElement('div');
@@ -154,25 +190,51 @@ async function searchAnime() {
       card.onclick = (e) => openAnimeModal(anime, e);
       
       const imgSrc = getValidImageUrl(anime.poster?.originalUrl);
+      const kindUpper = anime.kind ? anime.kind.toUpperCase() : 'TV';
+      const year = anime.airedOn?.year || '—';
 
+      // FIX: все данные из API экранируются через escapeHtml.
       card.innerHTML = `
         <div class="img-container">
-          <img src="${imgSrc}" alt="" loading="lazy">
+          <img src="${escapeHtml(imgSrc)}" alt="" loading="lazy">
         </div>
         <div class="anime-card-content">
-          <h3>${anime.russian || anime.name}</h3>
-          <p>${anime.name}</p>
-          <div><span class="badge">${anime.kind ? anime.kind.toUpperCase() : 'TV'}</span> • ${anime.airedOn?.year || '—'}</div>
+          <h3>${escapeHtml(anime.russian || anime.name)}</h3>
+          <p>${escapeHtml(anime.name)}</p>
+          <div><span class="badge">${escapeHtml(kindUpper)}</span> • ${escapeHtml(year)}</div>
         </div>`;
+
+      attachImgFallback(card.querySelector('img'));
       res.appendChild(card);
     });
   } catch(e) {
+    // FIX: AbortError — это не ошибка для пользователя.
+    if (e.name === 'AbortError') return;
     err.textContent = 'Ошибка поиска: ' + e.message;
     err.classList.remove('hidden');
   } finally { 
     btn.disabled = false; btn.textContent = 'Найти'; 
     loader.classList.add('hidden');
   }
+}
+
+// FIX: обёртки для LRU-кеша.
+function cacheSet(id, value) {
+  if (charactersCache.size >= CACHE_LIMIT) {
+    // Удаляем самый старый ключ (Map хранит порядок вставки).
+    const oldestKey = charactersCache.keys().next().value;
+    charactersCache.delete(oldestKey);
+  }
+  charactersCache.set(id, value);
+}
+
+function cacheGet(id) {
+  if (!charactersCache.has(id)) return null;
+  // Обновляем "свежесть" — перемещаем в конец.
+  const value = charactersCache.get(id);
+  charactersCache.delete(id);
+  charactersCache.set(id, value);
+  return value;
 }
 
 function openAnimeModal(anime, event) {
@@ -182,16 +244,20 @@ function openAnimeModal(anime, event) {
     event.currentTarget.classList.add('selected');
   }
 
-  document.getElementById('animeModalImg').src = getValidImageUrl(anime.poster?.originalUrl);
+  const modalImg = document.getElementById('animeModalImg');
+  modalImg.src = getValidImageUrl(anime.poster?.originalUrl);
+
   document.getElementById('animeModalTitle').textContent = anime.russian || anime.name;
-  document.getElementById('animeModalMeta').textContent = `${anime.name} • ${anime.kind ? anime.kind.toUpperCase() : 'TV'} (${anime.airedOn?.year || '—'})`;
+  document.getElementById('animeModalMeta').textContent =
+    `${anime.name} • ${anime.kind ? anime.kind.toUpperCase() : 'TV'} (${anime.airedOn?.year || '—'})`;
   
   document.getElementById('charFilter').value = '';
   document.getElementById('progressBar').style.width = '0%';
   document.getElementById('progressText').textContent = '';
 
-  if (charactersCache[anime.id]) {
-    allCharacters = charactersCache[anime.id];
+  const cached = cacheGet(anime.id);
+  if (cached) {
+    allCharacters = cached;
     document.getElementById('charCounter').textContent = allCharacters.length + ' персонажей';
     document.getElementById('exportBtn').disabled = false;
     document.getElementById('loadCharsBtn').textContent = 'Обновить персонажей';
@@ -270,7 +336,7 @@ async function loadCharacters() {
     }
 
     allCharacters = Array.from(map.values());
-    charactersCache[currentAnime.id] = allCharacters;
+    cacheSet(currentAnime.id, allCharacters);
 
     document.getElementById('charCounter').textContent = allCharacters.length + ' персонажей';
     document.getElementById('exportBtn').disabled = allCharacters.length === 0;
@@ -279,7 +345,7 @@ async function loadCharacters() {
     progressBar.style.width = '100%';
     progressText.textContent = `Готово! Загружено персонажей: ${allCharacters.length}`;
   } catch(e) {
-    grid.innerHTML = `<p class="error">Ошибка загрузки: ${e.message}</p>`;
+    grid.innerHTML = `<p class="error">Ошибка загрузки: ${escapeHtml(e.message)}</p>`;
     progressText.textContent = 'Ошибка';
   } finally { 
     btn.disabled = false; loader.classList.add('hidden'); 
@@ -310,13 +376,14 @@ function renderCharacters() {
     
     card.innerHTML = `
       <div class="img-container" style="height: 170px;">
-        <img src="${c.image}" alt="" loading="lazy">
+        <img src="${escapeHtml(c.image)}" alt="" loading="lazy">
       </div>
       <div class="char-info">
-        <div class="char-name">${c.russian || c.name || 'Не указано'}</div>
-        <div class="char-role">${c.role || 'Не указано'}</div>
+        <div class="char-name">${escapeHtml(c.russian || c.name || 'Не указано')}</div>
+        <div class="char-role">${escapeHtml(c.role || 'Не указано')}</div>
         <span class="details-hint">Подробнее ↗</span>
       </div>`;
+    attachImgFallback(card.querySelector('img'));
     grid.appendChild(card);
   });
   
@@ -331,6 +398,10 @@ function renderCharacters() {
 }
 
 async function openCharacterDetails(char) {
+  // FIX: фиксируем номер запроса — если пользователь кликнет по другой карточке,
+  // ответ на старый запрос будет проигнорирован.
+  const mySeq = ++detailsSeq;
+
   const modal = document.getElementById('charModal');
   const modalImg = document.getElementById('modalImg');
   const modalName = document.getElementById('modalName');
@@ -364,13 +435,22 @@ async function openCharacterDetails(char) {
 
   try {
     const data = await fetchGraphQL(query, { id: String(char.id) });
+
+    // FIX: игнорируем устаревший ответ.
+    if (mySeq !== detailsSeq) return;
+
     const details = data.characters && data.characters[0];
 
     if (details) {
       let desc = details.description || 'Описание отсутствует.';
       
+      // FIX: сначала экранируем ВСЁ, потом добавляем свои теги-ссылки.
+      // Раньше имя из API вставлялось в href/innerHTML без проверки → XSS.
+      desc = escapeHtml(desc);
+
+      // Заменяем уже на экранированном тексте — теги безопасны, т.к. мы сами их пишем.
       desc = desc.replace(/\[character=(\d+)\](.*?)\[\/character\]/g, (match, id, name) => {
-        return `<a href="https://shikimori.io/characters/${id}" target="_blank" style="color: #818cf8; text-decoration: underline;">${name}</a>`;
+        return `<a href="https://shikimori.io/characters/${encodeURIComponent(id)}" target="_blank" rel="noopener noreferrer" style="color: #818cf8; text-decoration: underline;">${name}</a>`;
       });
       desc = desc.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/g, '<span style="background: #334155; padding: 2px 6px; border-radius: 4px;">$1</span>');
 
@@ -381,31 +461,52 @@ async function openCharacterDetails(char) {
       const posterUrl = details.poster?.originalUrl;
       if (posterUrl) {
         const validPoster = getValidImageUrl(posterUrl);
-        modalRefs.innerHTML += `
-          <div class="ref-item" title="Основной постер">
-            <img src="${validPoster}" alt="poster" loading="lazy" onclick="window.open('${validPoster}', '_blank')">
-          </div>`;
+        const refEl = document.createElement('div');
+        refEl.className = 'ref-item';
+        refEl.title = 'Основной постер';
+        const imgEl = document.createElement('img');
+        imgEl.src = validPoster;
+        imgEl.alt = 'poster';
+        imgEl.loading = 'lazy';
+        // FIX: обработчик через addEventListener, а не inline onclick с URL из API.
+        imgEl.addEventListener('click', () => window.open(validPoster, '_blank', 'noopener'));
+        attachImgFallback(imgEl);
+        refEl.appendChild(imgEl);
+        modalRefs.appendChild(refEl);
       }
 
       if (char.image && char.image !== MISSING_IMG) {
-        modalRefs.innerHTML += `
-          <div class="ref-item" title="Портрет">
-            <img src="${char.image}" alt="portrait" loading="lazy" onclick="window.open('${char.image}', '_blank')">
-          </div>`;
+        const refEl = document.createElement('div');
+        refEl.className = 'ref-item';
+        refEl.title = 'Портрет';
+        const imgEl = document.createElement('img');
+        imgEl.src = char.image;
+        imgEl.alt = 'portrait';
+        imgEl.loading = 'lazy';
+        imgEl.addEventListener('click', () => window.open(char.image, '_blank', 'noopener'));
+        attachImgFallback(imgEl);
+        refEl.appendChild(imgEl);
+        modalRefs.appendChild(refEl);
       }
 
-      const charName = details.russian || details.name;
-      modalRefs.innerHTML += `
-        <div class="ref-item" title="Искать больше в Яндекс Картинках" onclick="window.open('https://yandex.ru/images/search?text=${encodeURIComponent(charName + ' арт')}', '_blank')" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111827; text-align:center; padding:5px;">
-          <span style="font-size:18px;">🔍</span>
-          <span style="font-size:9px; color:#818cf8; margin-top:4px;">Ещё в Яндекс ↗</span>
-        </div>`;
+      const charName = details.russian || details.name || char.name || '';
+      const yandexUrl = `https://yandex.ru/images/search?text=${encodeURIComponent(charName + ' арт')}`;
+      const searchRef = document.createElement('div');
+      searchRef.className = 'ref-item';
+      searchRef.title = 'Искать больше в Яндекс Картинках';
+      searchRef.style.cssText = 'cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111827; text-align:center; padding:5px;';
+      searchRef.innerHTML = `
+        <span style="font-size:18px;">🔍</span>
+        <span style="font-size:9px; color:#818cf8; margin-top:4px;">Ещё в Яндекс ↗</span>`;
+      searchRef.addEventListener('click', () => window.open(yandexUrl, '_blank', 'noopener'));
+      modalRefs.appendChild(searchRef);
 
     } else {
       modalDesc.textContent = 'Не удалось загрузить подробную информацию.';
       modalRefs.innerHTML = '';
     }
   } catch(e) {
+    if (mySeq !== detailsSeq) return;
     modalDesc.textContent = 'Ошибка загрузки: ' + e.message;
     modalRefs.innerHTML = '';
   }
@@ -419,12 +520,21 @@ function closeModal(e) {
 
 function exportJSON() {
   if (!currentAnime || !allCharacters.length) return;
-  const data = { anime: { id: currentAnime.id, title: currentAnime.russian||currentAnime.name }, characters: allCharacters };
+  const data = {
+    anime: { id: currentAnime.id, title: currentAnime.russian || currentAnime.name },
+    characters: allCharacters
+  };
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `shikimori_${currentAnime.id}.json`;
+  document.body.appendChild(a);
   a.click();
+  // FIX: освобождаем blob URL и убираем элемент.
+  setTimeout(() => {
+    URL.revokeObjectURL(a.href);
+    a.remove();
+  }, 100);
 }
 </script>
 </body>
