@@ -65,7 +65,6 @@ const SHIKI_API = "/api/shiki/graphql";
 let currentAnime = null;
 let allCharacters = [];
 
-// Функция проверки, является ли ссылка реальным изображением (не заглушкой missing)
 function getValidImageUrl(url) {
   if (!url || url.includes('missing')) return null;
   return url;
@@ -77,7 +76,15 @@ async function fetchGraphQL(query, variables = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, variables })
   });
-  const result = await resp.json();
+
+  const text = await resp.text();
+  let result;
+  try {
+    result = JSON.parse(text);
+  } catch (e) {
+    throw new Error(`Сервер вернул не JSON (Возможно, ошибка Vercel): ${text.substring(0, 100)}`);
+  }
+
   if (result.errors) throw new Error(result.errors[0].message);
   return result.data;
 }
