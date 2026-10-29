@@ -76,7 +76,7 @@
     <div class="references-section">
       <h3>Референсы и арты (прокрутите вправо ➔)</h3>
       <div id="modalRefs" class="refs-scroll-container">
-        <span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>
+        <span style="font-size: 12px; color: var(--text-muted);">Загрузка артов...</span>
       </div>
     </div>
   </div>
@@ -347,10 +347,11 @@ async function openCharacterDetails(char) {
   modalLink.href = cleanUrl;
 
   modalDesc.textContent = 'Загрузка описания...';
-  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>';
+  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка артов и референсов...</span>';
   
   modal.classList.remove('hidden');
 
+  // 1. Загружаем описание с Shikimori
   const query = `
     query($id: String!) {
       characters(ids: $id) {
@@ -362,9 +363,16 @@ async function openCharacterDetails(char) {
     }
   `;
 
+  // Запускаем параллельно запрос к Shikimori и запрос артов через наш новый прокси /api/booru
+  const searchTag = char.name ? char.name.split(' ')[0] : ''; // Берем первое имя для точного поиска на боору
+
   try {
-    const data = await fetchGraphQL(query, { id: String(char.id) });
-    const details = data.characters && data.characters[0];
+    const [shikiData, booruResp] = await Promise.all([
+      fetchGraphQL(query, { id: String(char.id) }),
+      fetch(`/api/booru?tag=${encodeURIComponent(searchTag)}`).then(r => r.json()).catch(() => [])
+    ]);
+
+    const details = shikiData.characters && shikiData.characters[0];
 
     if (details) {
       let desc = details.description || 'Описание отсутствует.';
@@ -378,7 +386,7 @@ async function openCharacterDetails(char) {
       
       modalRefs.innerHTML = '';
       
-      // 1. Основной постер персонажа
+      // 1. Добавляем официальный постер Shikimori
       const posterUrl = details.poster?.originalUrl;
       if (posterUrl) {
         const validPoster = getValidImageUrl(posterUrl);
@@ -388,7 +396,7 @@ async function openCharacterDetails(char) {
           </div>`;
       }
 
-      // 2. Портрет из роли
+      // 2. Добавляем портрет
       if (char.image && char.image !== MISSING_IMG) {
         modalRefs.innerHTML += `
           <div class="ref-item" title="Портрет">
@@ -396,13 +404,23 @@ async function openCharacterDetails(char) {
           </div>`;
       }
 
-      // 3. Интерактивная карточка для быстрого поиска в Яндексе
-      const charName = details.russian || details.name;
-      modalRefs.innerHTML += `
-        <div class="ref-item" title="Искать больше в Яндекс Картинках" onclick="window.open('https://yandex.ru/images/search?text=${encodeURIComponent(charName + ' арт')}', '_blank')" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111827; text-align:center; padding:5px;">
-          <span style="font-size:18px;">🔍</span>
-          <span style="font-size:9px; color:#818cf8; margin-top:4px;">Ещё в Яндекс ↗</span>
-        </div>`;
+      // 3. Добавляем арты, найденные через /api/booru
+      if (booruResp && booruResp.length > 0) {
+        booruResp.forEach((imgUrl, idx) => {
+          modalRefs.innerHTML += `
+            <div class="ref-item" title="Арт ${idx + 1}">
+              <img src="${imgUrl}" alt="art ${idx + 1}" loading="lazy" onclick="window.open('${imgUrl}', '_blank')">
+            </div>`;
+        });
+      } else {
+        // Если боору ничего не нашел по тегу, показываем карточку поиска
+        const charName = details.russian || details.name;
+        modalRefs.innerHTML += `
+          <div class="ref-item" title="Искать больше в Яндекс Картинках" onclick="window.open('https://yandex.ru/images/search?text=${encodeURIComponent(charName + ' арт')}', '_blank')" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111827; text-align:center; padding:5px;">
+            <span style="font-size:18px;">🔍</span>
+            <span style="font-size:9px; color:#818cf8; margin-top:4px;">Ещё в Яндекс ↗</span>
+          </div>`;
+      }
 
     } else {
       modalDesc.textContent = 'Не удалось загрузить подробную информацию.';
