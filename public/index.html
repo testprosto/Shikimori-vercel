@@ -13,8 +13,11 @@
   --accent: #6366f1;
   --accent-hover: #4f46e5;
   --border: #334155;
-  --danger: #ef4444;
   --success: #22c55e;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
@@ -22,7 +25,7 @@ body {
   background-color: var(--bg-color);
   color: var(--text-main);
   margin: 0;
-  padding: 30px 20px;
+  padding: 15px;
 }
 
 .container {
@@ -31,8 +34,8 @@ body {
 }
 
 h1 {
-  font-size: 28px;
-  margin-bottom: 25px;
+  font-size: 24px;
+  margin-bottom: 20px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -41,13 +44,21 @@ h1 {
 
 .search-box {
   display: flex;
-  gap: 12px;
-  margin-bottom: 25px;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
   background: var(--card-bg);
-  padding: 8px;
+  padding: 12px;
   border-radius: 12px;
   border: 1px solid var(--border);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+@media (min-width: 640px) {
+  .search-box {
+    flex-direction: row;
+    align-items: center;
+  }
 }
 
 input[type="text"], select {
@@ -56,8 +67,9 @@ input[type="text"], select {
   color: var(--text-main);
   padding: 12px 16px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 15px;
   outline: none;
+  width: 100%;
   transition: border-color 0.2s;
 }
 
@@ -66,21 +78,27 @@ input[type="text"]:focus, select:focus {
 }
 
 input#searchInput {
-  flex: 1;
   border: none;
   background: transparent;
-  font-size: 16px;
+  padding: 4px 0;
 }
 
 button {
   background: var(--accent);
   color: #fff;
   border: none;
-  padding: 10px 24px;
+  padding: 12px 20px;
   border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
+  width: 100%;
   transition: background 0.2s, transform 0.1s;
+}
+
+@media (min-width: 640px) {
+  button {
+    width: auto;
+  }
 }
 
 button:hover {
@@ -99,8 +117,15 @@ button:disabled {
 
 .anime-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .anime-list {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+  }
 }
 
 .anime-card {
@@ -115,7 +140,7 @@ button:disabled {
 }
 
 .anime-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-3px);
   border-color: var(--accent);
   box-shadow: 0 10px 20px -5px rgba(99, 102, 241, 0.3);
 }
@@ -125,28 +150,44 @@ button:disabled {
   box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
 }
 
-.anime-card img {
+/* Контейнер картинки с object-fit contain, чтобы картинка была видна полностью */
+.img-container {
   width: 100%;
-  height: 260px;
-  object-fit: cover;
-  background: #0f172a;
+  height: 240px;
+  background: #090d16;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  .img-container {
+    height: 280px;
+  }
+}
+
+.img-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* Картинка видна полностью без обрезки */
 }
 
 .anime-card-content {
-  padding: 14px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
   flex: 1;
 }
 
 .anime-card h3 {
-  font-size: 14px;
-  margin: 0 0 6px 0;
+  font-size: 13px;
+  margin: 0 0 4px 0;
   line-height: 1.3;
 }
 
 .anime-card p {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-muted);
   margin: 2px 0;
 }
@@ -159,29 +200,49 @@ button:disabled {
   font-size: 11px;
   font-weight: 600;
   display: inline-block;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .characters-section {
-  margin-top: 40px;
+  margin-top: 30px;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 24px;
+  padding: 16px;
+}
+
+@media (min-width: 768px) {
+  .characters-section {
+    padding: 24px;
+  }
 }
 
 .controls-bar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  margin: 20px 0;
+  flex-direction: column;
+  gap: 10px;
+  margin: 15px 0;
+}
+
+@media (min-width: 768px) {
+  .controls-bar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
 }
 
 .characters-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+@media (min-width: 768px) {
+  .characters-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+  }
 }
 
 .char-card {
@@ -191,28 +252,10 @@ button:disabled {
   border: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  transition: transform 0.2s;
-}
-
-.char-card:hover {
-  transform: translateY(-2px);
-}
-
-.char-img-wrap {
-  width: 100%;
-  height: 210px;
-  background: #1e293b;
-  overflow: hidden;
-}
-
-.char-img-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 .char-info {
-  padding: 12px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -220,15 +263,15 @@ button:disabled {
 
 .char-name {
   font-weight: 600;
-  font-size: 13px;
-  margin-bottom: 4px;
+  font-size: 12px;
+  margin-bottom: 2px;
 }
 
 .char-role {
   font-size: 11px;
   color: #f43f5e;
   font-weight: 600;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .char-info a {
@@ -298,13 +341,13 @@ button:disabled {
   <div id="animeResults" class="anime-list"></div>
 
   <div id="characterSection" class="characters-section hidden">
-    <h2 id="selectedTitle" style="margin-top:0; font-size:20px;"></h2>
+    <h2 id="selectedTitle" style="margin-top:0; font-size:18px;"></h2>
     
     <div class="controls-bar">
       <button id="loadCharsBtn" onclick="loadCharacters()">Загрузить персонажей</button>
       <button id="exportBtn" onclick="exportJSON()" disabled>Экспорт в JSON</button>
       <span id="charCounter" class="badge">0 персонажей</span>
-      <input type="text" id="charFilter" placeholder="Фильтр по имени..." style="width:200px;" oninput="renderCharacters()">
+      <input type="text" id="charFilter" placeholder="Фильтр по имени..." oninput="renderCharacters()">
       <select id="roleFilter" onchange="renderCharacters()">
         <option value="all">Все роли</option>
         <option value="Main">Главные (Main)</option>
@@ -325,7 +368,7 @@ const SHIKI_API = "/api/shiki/graphql";
 const MISSING_IMG = "https://shikimori.io/assets/globals/missing_original.jpg";
 
 let currentAnime = null;
-const charactersCache = {}; // Кэш для персонажей, чтобы не перекачивать заново при переключении
+const charactersCache = {};
 let allCharacters = [];
 
 function getValidImageUrl(url) {
@@ -395,7 +438,9 @@ async function searchAnime() {
       const imgSrc = getValidImageUrl(anime.poster?.originalUrl);
 
       card.innerHTML = `
-        <img src="${imgSrc}" alt="" loading="lazy">
+        <div class="img-container">
+          <img src="${imgSrc}" alt="" loading="lazy">
+        </div>
         <div class="anime-card-content">
           <h3>${anime.russian || anime.name}</h3>
           <p>${anime.name}</p>
@@ -420,16 +465,15 @@ function selectAnime(anime, card) {
   document.getElementById('characterSection').classList.remove('hidden');
   document.getElementById('selectedTitle').textContent = `✨ ${anime.russian || anime.name} (ID: ${anime.id})`;
   
-  document.getElementById('charFilter.value') = '';
+  document.getElementById('charFilter').value = '';
   document.getElementById('progressBar').style.width = '0%';
   document.getElementById('progressText').textContent = '';
 
-  // Проверяем, есть ли персонажи в кэше
   if (charactersCache[anime.id]) {
     allCharacters = charactersCache[anime.id];
     document.getElementById('charCounter').textContent = allCharacters.length + ' персонажей';
     document.getElementById('exportBtn').disabled = false;
-    document.getElementById('loadCharsBtn.textContent') = 'Обновить персонажей';
+    document.getElementById('loadCharsBtn').textContent = 'Обновить персонажей';
     renderCharacters();
   } else {
     allCharacters = [];
@@ -443,7 +487,6 @@ function selectAnime(anime, card) {
 async function loadCharacters() {
   if (!currentAnime) return;
   
-  // Если уже есть в кэше и пользователь просто нажал кнопку повторно, можно пропустить или обновить
   const btn = document.getElementById('loadCharsBtn');
   const loader = document.getElementById('charLoader');
   const grid = document.getElementById('charactersGrid');
@@ -498,7 +541,7 @@ async function loadCharacters() {
     }
 
     allCharacters = Array.from(map.values());
-    charactersCache[currentAnime.id] = allCharacters; // Сохраняем в кэш!
+    charactersCache[currentAnime.id] = allCharacters;
 
     document.getElementById('charCounter').textContent = allCharacters.length + ' персонажей';
     document.getElementById('exportBtn').disabled = allCharacters.length === 0;
@@ -536,7 +579,9 @@ function renderCharacters() {
     card.className = 'char-card';
     
     card.innerHTML = `
-      <div class="char-img-wrap"><img src="${c.image}" alt="" loading="lazy"></div>
+      <div class="img-container" style="height: 190px;">
+        <img src="${c.image}" alt="" loading="lazy">
+      </div>
       <div class="char-info">
         <div class="char-name">${c.russian || c.name || 'Не указано'}</div>
         <div class="char-role">${c.role || 'Не указано'}</div>
