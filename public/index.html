@@ -9,24 +9,41 @@
 <body>
 <div class="container">
   <h1>✨ Shikimori Finder Hub</h1>
-  
-  <div class="search-box">
-    <input type="text" id="searchInput" value="The World's Finest Assassin" placeholder="Введите название аниме...">
-    <button id="searchBtn" onclick="searchAnime()">Найти</button>
+
+  <div class="search-box" role="search" aria-label="Поиск аниме">
+    <label for="searchInput" class="sr-only">Название аниме</label>
+    <input
+      type="text"
+      id="searchInput"
+      value="The World's Finest Assassin"
+      placeholder="Введите название аниме..."
+      autocomplete="off"
+      aria-label="Название аниме">
+    <button id="searchBtn" type="button" onclick="searchAnime()" aria-label="Найти аниме">Найти</button>
   </div>
 
-  <div id="error" class="error hidden"></div>
-  <div id="searchLoader" class="hidden" style="text-align: center; padding: 20px;"><span class="loader"></span> Поиск аниме...</div>
-  
-  <div id="animeResults" class="anime-list"></div>
+  <div id="error" class="error hidden" role="alert" aria-live="assertive"></div>
+  <div id="searchLoader" class="hidden" role="status" aria-live="polite"
+       style="text-align: center; padding: 20px;">
+    <span class="loader" aria-hidden="true"></span> Поиск аниме...
+  </div>
+
+  <div id="animeResults" class="anime-list" aria-live="polite" aria-busy="false"></div>
 </div>
 
 <!-- Модальное окно для управления аниме -->
-<div id="animeModal" class="modal-overlay hidden" onclick="closeAnimeModal(event)">
-  <div class="modal-content" onclick="event.stopPropagation()">
-    <button class="modal-close" onclick="closeAnimeModal()">×</button>
+<div
+  id="animeModal"
+  class="modal-overlay hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="animeModalTitle"
+  aria-hidden="true"
+  onclick="closeAnimeModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()" aria-busy="false">
+    <button class="modal-close" type="button" onclick="closeAnimeModal()" aria-label="Закрыть окно аниме">×</button>
     <div class="modal-header">
-      <img id="animeModalImg" class="modal-poster" src="" alt="">
+      <img id="animeModalImg" class="modal-poster" src="" alt="Постер аниме">
       <div class="modal-title-area">
         <h2 id="animeModalTitle">Название аниме</h2>
         <p id="animeModalMeta" style="color: var(--text-muted); font-size:12px;"></p>
@@ -35,47 +52,79 @@
 
     <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 15px;">
       <div class="controls-bar" style="margin: 0 0 15px 0;">
-        <button id="loadCharsBtn" onclick="loadCharacters()">Загрузить персонажей</button>
-        <button id="exportBtn" onclick="exportJSON()" disabled>Экспорт в JSON</button>
-        <span id="charCounter" class="badge">0 персонажей</span>
+        <button id="loadCharsBtn" type="button" onclick="loadCharacters()">Загрузить персонажей</button>
+        <button id="exportBtn" type="button" onclick="exportJSON()" disabled aria-disabled="true">Экспорт в JSON</button>
+        <span id="charCounter" class="badge" role="status" aria-live="polite">0 персонажей</span>
       </div>
 
-      <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
-        <input type="text" id="charFilter" placeholder="Фильтр по имени..." style="flex:1; min-width: 150px;" oninput="renderCharacters()">
-        <select id="roleFilter" onchange="renderCharacters()" style="width: auto;">
+      <div role="group" aria-label="Фильтры персонажей"
+           style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
+        <label for="charFilter" class="sr-only">Фильтр по имени персонажа</label>
+        <input
+          type="text"
+          id="charFilter"
+          placeholder="Фильтр по имени..."
+          autocomplete="off"
+          style="flex:1; min-width: 150px;"
+          oninput="renderCharacters()"
+          aria-label="Фильтр по имени персонажа">
+        <label for="roleFilter" class="sr-only">Фильтр по роли</label>
+        <select id="roleFilter" onchange="renderCharacters()" style="width: auto;" aria-label="Фильтр по роли">
           <option value="all">Все роли</option>
           <option value="Main">Главные (Main)</option>
           <option value="Supporting">Второстепенные (Supporting)</option>
         </select>
       </div>
 
-      <div id="charLoader" class="hidden" style="margin: 10px 0;"><span class="loader"></span> Загрузка персонажей...</div>
-      <div class="progress-container"><div id="progressBar" class="progress-bar"></div></div>
-      <div id="progressText" style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;"></div>
-      
-      <div id="charactersGrid" class="characters-grid"></div>
+      <div id="charLoader" class="hidden" role="status" aria-live="polite" style="margin: 10px 0;">
+        <span class="loader" aria-hidden="true"></span> Загрузка персонажей...
+      </div>
+      <div class="progress-container"
+           role="progressbar"
+           aria-valuemin="0"
+           aria-valuemax="100"
+           aria-valuenow="0"
+           aria-label="Прогресс загрузки персонажей">
+        <div id="progressBar" class="progress-bar"></div>
+      </div>
+      <div id="progressText" role="status" aria-live="polite"
+           style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;"></div>
+
+      <div id="charactersGrid" class="characters-grid" aria-busy="false"></div>
     </div>
   </div>
 </div>
 
 <!-- Модальное окно с деталями персонажа и лентой референсов -->
-<div id="charModal" class="modal-overlay hidden" onclick="closeModal(event)">
-  <div class="modal-content" onclick="event.stopPropagation()">
-    <button class="modal-close" onclick="closeModal()">×</button>
+<div
+  id="charModal"
+  class="modal-overlay hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="modalName"
+  aria-hidden="true"
+  onclick="closeModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()" aria-busy="false">
+    <button class="modal-close" type="button" onclick="closeModal()" aria-label="Закрыть окно персонажа">×</button>
     <div class="modal-header">
-      <img id="modalImg" class="modal-poster" src="" alt="">
+      <img id="modalImg" class="modal-poster" src="" alt="Портрет персонажа">
       <div class="modal-title-area">
         <h2 id="modalName">Имя персонажа</h2>
-        <p id="modalRole" style="color: #f43f5e; font-weight:600;"></p>
-        <a id="modalLink" href="" target="_blank" rel="noopener noreferrer" style="font-size: 12px; color: #818cf8; text-decoration: none;">Открыть на Shikimori ↗</a>
+        <p id="modalRole" style="color: #fb7185; font-weight:600;"></p>
+        <a id="modalLink" href="#" target="_blank" rel="noopener noreferrer"
+           style="font-size: 12px; color: #a5b4fc; text-decoration: none;">
+          Открыть на Shikimori ↗
+        </a>
       </div>
     </div>
-    
+
     <div class="modal-description" id="modalDesc">Загрузка описания...</div>
-    
+
     <div class="references-section">
       <h3>Референсы и арты (прокрутите вправо ➔)</h3>
-      <div id="modalRefs" class="refs-scroll-container">
+      <div id="modalRefs" class="refs-scroll-container"
+           role="list"
+           aria-label="Галерея референсов персонажа">
         <span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>
       </div>
     </div>
@@ -84,20 +133,28 @@
 
 <script>
 const SHIKI_API = "/api/shiki/graphql";
-const MISSING_IMG = "missing.jpg"; // FIX: своя локальная заглушка, не зависим от shikimori.io
+const MISSING_IMG = "missing.jpg";
 
 let currentAnime = null;
-// FIX: LRU-кеш вместо бесконечного объекта. Map сохраняет порядок вставки.
 const charactersCache = new Map();
 const CACHE_LIMIT = 50;
 let allCharacters = [];
 
-// FIX: последовательность для защиты от race condition при быстром клике по карточкам.
 let detailsSeq = 0;
-// FIX: AbortController для отмены предыдущего поиска.
 let searchController = null;
 
-// FIX: экранирование HTML — критично, т.к. всё вставляется через innerHTML.
+/* ---------- Фокус-менеджмент ---------- */
+
+// FIX: запоминаем, откуда открыли модалку, чтобы вернуть фокус после закрытия.
+const lastFocus = { anime: null, char: null };
+
+function focusFirstIn(modalEl) {
+  const closeBtn = modalEl.querySelector('.modal-close');
+  if (closeBtn) closeBtn.focus();
+}
+
+/* ---------- Утилиты ---------- */
+
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str)
@@ -113,13 +170,54 @@ function getValidImageUrl(url) {
   return url;
 }
 
-// FIX: обработчик onerror для картинок — ставим заглушку при 404.
 function attachImgFallback(imgEl) {
   imgEl.addEventListener('error', function handler() {
     imgEl.removeEventListener('error', handler);
     imgEl.src = MISSING_IMG;
   });
 }
+
+/* ---------- Управление модалками (a11y) ---------- */
+
+function openModal(id, fromElement) {
+  const modal = document.getElementById(id);
+  const key = id === 'animeModal' ? 'anime' : 'char';
+  lastFocus[key] = fromElement || document.activeElement;
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  // Ждём кадр, чтобы анимация/фокус сработали после появления в DOM.
+  requestAnimationFrame(() => focusFirstIn(modal));
+}
+
+function closeModalById(id) {
+  const modal = document.getElementById(id);
+  if (modal.classList.contains('hidden')) return;
+  const key = id === 'animeModal' ? 'anime' : 'char';
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  // Возвращаем фокус туда, откуда пришли.
+  if (lastFocus[key] && document.contains(lastFocus[key])) {
+    lastFocus[key].focus();
+  }
+  lastFocus[key] = null;
+  // Если открыта ещё одна модалка — оставляем блокировку скролла.
+  const anyOpen = !document.getElementById('animeModal').classList.contains('hidden')
+               || !document.getElementById('charModal').classList.contains('hidden');
+  if (!anyOpen) document.body.style.overflow = '';
+}
+
+/* FIX: Escape закрывает верхнюю открытую модалку. */
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!document.getElementById('charModal').classList.contains('hidden')) {
+    closeModalById('charModal');
+  } else if (!document.getElementById('animeModal').classList.contains('hidden')) {
+    closeModalById('animeModal');
+  }
+});
+
+/* ---------- GraphQL ---------- */
 
 async function fetchGraphQL(query, variables = {}, signal = undefined) {
   const resp = await fetch(SHIKI_API, {
@@ -141,11 +239,12 @@ async function fetchGraphQL(query, variables = {}, signal = undefined) {
   return result.data;
 }
 
+/* ---------- Поиск аниме ---------- */
+
 async function searchAnime() {
   const q = document.getElementById('searchInput').value.trim();
   if (!q) return;
 
-  // FIX: отменяем предыдущий запрос, если он ещё висит.
   if (searchController) searchController.abort();
   searchController = new AbortController();
   const signal = searchController.signal;
@@ -158,6 +257,7 @@ async function searchAnime() {
   btn.disabled = true; btn.textContent = 'Поиск...';
   loader.classList.remove('hidden');
   err.classList.add('hidden'); res.innerHTML = '';
+  res.setAttribute('aria-busy', 'true');
 
   const query = `
     query($search: String) {
@@ -182,24 +282,34 @@ async function searchAnime() {
     }
 
     animes.forEach(anime => {
+      // FIX: role="button" + tabindex + keydown — карточка работает с клавиатуры.
       const card = document.createElement('div');
       card.className = 'anime-card';
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      const title = anime.russian || anime.name;
+      card.setAttribute('aria-label', `Аниме: ${title}. Открыть подробнее`);
       if (currentAnime && currentAnime.id === anime.id) {
         card.classList.add('selected');
       }
       card.onclick = (e) => openAnimeModal(anime, e);
-      
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openAnimeModal(anime, e);
+        }
+      });
+
       const imgSrc = getValidImageUrl(anime.poster?.originalUrl);
       const kindUpper = anime.kind ? anime.kind.toUpperCase() : 'TV';
       const year = anime.airedOn?.year || '—';
 
-      // FIX: все данные из API экранируются через escapeHtml.
       card.innerHTML = `
         <div class="img-container">
           <img src="${escapeHtml(imgSrc)}" alt="" loading="lazy">
         </div>
         <div class="anime-card-content">
-          <h3>${escapeHtml(anime.russian || anime.name)}</h3>
+          <h3>${escapeHtml(title)}</h3>
           <p>${escapeHtml(anime.name)}</p>
           <div><span class="badge">${escapeHtml(kindUpper)}</span> • ${escapeHtml(year)}</div>
         </div>`;
@@ -208,20 +318,20 @@ async function searchAnime() {
       res.appendChild(card);
     });
   } catch(e) {
-    // FIX: AbortError — это не ошибка для пользователя.
     if (e.name === 'AbortError') return;
     err.textContent = 'Ошибка поиска: ' + e.message;
     err.classList.remove('hidden');
-  } finally { 
-    btn.disabled = false; btn.textContent = 'Найти'; 
+  } finally {
+    btn.disabled = false; btn.textContent = 'Найти';
     loader.classList.add('hidden');
+    res.setAttribute('aria-busy', 'false');
   }
 }
 
-// FIX: обёртки для LRU-кеша.
+/* ---------- Кеш ---------- */
+
 function cacheSet(id, value) {
   if (charactersCache.size >= CACHE_LIMIT) {
-    // Удаляем самый старый ключ (Map хранит порядок вставки).
     const oldestKey = charactersCache.keys().next().value;
     charactersCache.delete(oldestKey);
   }
@@ -230,19 +340,19 @@ function cacheSet(id, value) {
 
 function cacheGet(id) {
   if (!charactersCache.has(id)) return null;
-  // Обновляем "свежесть" — перемещаем в конец.
   const value = charactersCache.get(id);
   charactersCache.delete(id);
   charactersCache.set(id, value);
   return value;
 }
 
+/* ---------- Модалка аниме ---------- */
+
 function openAnimeModal(anime, event) {
   currentAnime = anime;
   document.querySelectorAll('.anime-card').forEach(c => c.classList.remove('selected'));
-  if (event && event.currentTarget) {
-    event.currentTarget.classList.add('selected');
-  }
+  const trigger = event && event.currentTarget ? event.currentTarget : document.activeElement;
+  if (trigger && trigger.classList) trigger.classList.add('selected');
 
   const modalImg = document.getElementById('animeModalImg');
   modalImg.src = getValidImageUrl(anime.poster?.originalUrl);
@@ -250,9 +360,11 @@ function openAnimeModal(anime, event) {
   document.getElementById('animeModalTitle').textContent = anime.russian || anime.name;
   document.getElementById('animeModalMeta').textContent =
     `${anime.name} • ${anime.kind ? anime.kind.toUpperCase() : 'TV'} (${anime.airedOn?.year || '—'})`;
-  
+
   document.getElementById('charFilter').value = '';
+  const progressEl = document.querySelector('.progress-container');
   document.getElementById('progressBar').style.width = '0%';
+  progressEl.setAttribute('aria-valuenow', '0');
   document.getElementById('progressText').textContent = '';
 
   const cached = cacheGet(anime.id);
@@ -260,6 +372,7 @@ function openAnimeModal(anime, event) {
     allCharacters = cached;
     document.getElementById('charCounter').textContent = allCharacters.length + ' персонажей';
     document.getElementById('exportBtn').disabled = false;
+    document.getElementById('exportBtn').setAttribute('aria-disabled', 'false');
     document.getElementById('loadCharsBtn').textContent = 'Обновить персонажей';
     renderCharacters();
   } else {
@@ -267,29 +380,38 @@ function openAnimeModal(anime, event) {
     document.getElementById('charactersGrid').innerHTML = '';
     document.getElementById('charCounter').textContent = '0 персонажей';
     document.getElementById('exportBtn').disabled = true;
+    document.getElementById('exportBtn').setAttribute('aria-disabled', 'true');
     document.getElementById('loadCharsBtn').textContent = 'Загрузить персонажей';
   }
 
-  document.getElementById('animeModal').classList.remove('hidden');
+  openModal('animeModal', trigger);
 }
 
 function closeAnimeModal(e) {
   if (!e || e.target.id === 'animeModal' || e.target.classList.contains('modal-close')) {
-    document.getElementById('animeModal').classList.add('hidden');
+    closeModalById('animeModal');
   }
 }
 
+/* ---------- Загрузка персонажей ---------- */
+
 async function loadCharacters() {
   if (!currentAnime) return;
-  
+
   const btn = document.getElementById('loadCharsBtn');
   const loader = document.getElementById('charLoader');
   const grid = document.getElementById('charactersGrid');
   const progressBar = document.getElementById('progressBar');
+  const progressEl = document.querySelector('.progress-container');
   const progressText = document.getElementById('progressText');
-  
+  const modalContent = document.querySelector('#animeModal .modal-content');
+
   btn.disabled = true; loader.classList.remove('hidden'); grid.innerHTML = '';
-  progressBar.style.width = '30%'; progressText.textContent = 'Запрос к серверу Shikimori...';
+  grid.setAttribute('aria-busy', 'true');
+  if (modalContent) modalContent.setAttribute('aria-busy', 'true');
+
+  progressBar.style.width = '30%'; progressEl.setAttribute('aria-valuenow', '30');
+  progressText.textContent = 'Запрос к серверу Shikimori...';
 
   const query = `
     query($id: String!) {
@@ -311,16 +433,16 @@ async function loadCharacters() {
 
   try {
     const data = await fetchGraphQL(query, { id: String(currentAnime.id) });
-    progressBar.style.width = '70%';
+    progressBar.style.width = '70%'; progressEl.setAttribute('aria-valuenow', '70');
     progressText.textContent = 'Обработка данных...';
-    
+
     const roles = data.animes[0]?.characterRoles || [];
 
     const map = new Map();
     for (const item of roles) {
       const ch = item.character;
       if (!ch || !ch.id) continue;
-      
+
       const roleName = item.rolesEn ? item.rolesEn[0] : (item.rolesRu ? item.rolesRu[0] : 'Main');
 
       if (!map.has(ch.id)) {
@@ -339,24 +461,30 @@ async function loadCharacters() {
     cacheSet(currentAnime.id, allCharacters);
 
     document.getElementById('charCounter').textContent = allCharacters.length + ' персонажей';
-    document.getElementById('exportBtn').disabled = allCharacters.length === 0;
-    
+    const exportBtn = document.getElementById('exportBtn');
+    exportBtn.disabled = allCharacters.length === 0;
+    exportBtn.setAttribute('aria-disabled', String(allCharacters.length === 0));
+
     renderCharacters();
-    progressBar.style.width = '100%';
+    progressBar.style.width = '100%'; progressEl.setAttribute('aria-valuenow', '100');
     progressText.textContent = `Готово! Загружено персонажей: ${allCharacters.length}`;
   } catch(e) {
-    grid.innerHTML = `<p class="error">Ошибка загрузки: ${escapeHtml(e.message)}</p>`;
+    grid.innerHTML = `<p class="error" role="alert">Ошибка загрузки: ${escapeHtml(e.message)}</p>`;
     progressText.textContent = 'Ошибка';
-  } finally { 
-    btn.disabled = false; loader.classList.add('hidden'); 
+  } finally {
+    btn.disabled = false; loader.classList.add('hidden');
+    grid.setAttribute('aria-busy', 'false');
+    if (modalContent) modalContent.setAttribute('aria-busy', 'false');
   }
 }
+
+/* ---------- Рендер сетки персонажей ---------- */
 
 function renderCharacters() {
   const grid = document.getElementById('charactersGrid');
   const q = (document.getElementById('charFilter').value || '').toLowerCase();
   const role = document.getElementById('roleFilter').value;
-  
+
   const list = allCharacters.filter(c => {
     const nameMatch = (c.russian||'').toLowerCase().includes(q) || (c.name||'').toLowerCase().includes(q);
     const roleMatch = role === 'all' || (c.role && c.role.toLowerCase() === role.toLowerCase());
@@ -364,16 +492,25 @@ function renderCharacters() {
   });
 
   grid.innerHTML = '';
-  if (!list.length) { 
-    grid.innerHTML = '<p style="color:var(--text-muted); grid-column: 1/-1;">Персонажи не найдены по фильтру.</p>'; 
-    return; 
+  if (!list.length) {
+    grid.innerHTML = '<p style="color:var(--text-muted); grid-column: 1/-1;">Персонажи не найдены по фильтру.</p>';
+    return;
   }
-  
+
   list.slice(0, 200).forEach(c => {
     const card = document.createElement('div');
     card.className = 'char-card';
-    card.onclick = () => openCharacterDetails(c);
-    
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', `Персонаж: ${c.russian || c.name || 'без имени'}. Подробнее`);
+    card.onclick = () => openCharacterDetails(c, card);
+    card.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openCharacterDetails(c, card);
+      }
+    });
+
     card.innerHTML = `
       <div class="img-container" style="height: 170px;">
         <img src="${escapeHtml(c.image)}" alt="" loading="lazy">
@@ -386,7 +523,7 @@ function renderCharacters() {
     attachImgFallback(card.querySelector('img'));
     grid.appendChild(card);
   });
-  
+
   if (list.length > 200) {
     const more = document.createElement('p');
     more.style.gridColumn = '1/-1';
@@ -397,30 +534,32 @@ function renderCharacters() {
   }
 }
 
-async function openCharacterDetails(char) {
-  // FIX: фиксируем номер запроса — если пользователь кликнет по другой карточке,
-  // ответ на старый запрос будет проигнорирован.
+/* ---------- Детали персонажа ---------- */
+
+async function openCharacterDetails(char, fromCard) {
   const mySeq = ++detailsSeq;
 
-  const modal = document.getElementById('charModal');
   const modalImg = document.getElementById('modalImg');
   const modalName = document.getElementById('modalName');
   const modalRole = document.getElementById('modalRole');
   const modalLink = document.getElementById('modalLink');
   const modalDesc = document.getElementById('modalDesc');
   const modalRefs = document.getElementById('modalRefs');
+  const modalContent = document.querySelector('#charModal .modal-content');
 
   modalImg.src = char.image;
+  modalImg.alt = `Портрет: ${char.russian || char.name || 'персонаж'}`;
   modalName.textContent = char.russian || char.name;
   modalRole.textContent = `Роль: ${char.role}`;
-  
+
   const cleanUrl = char.url ? (char.url.startsWith('http') ? char.url : `https://shikimori.io${char.url}`) : '#';
   modalLink.href = cleanUrl;
 
   modalDesc.textContent = 'Загрузка описания...';
   modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>';
-  
-  modal.classList.remove('hidden');
+
+  openModal('charModal', fromCard);
+  if (modalContent) modalContent.setAttribute('aria-busy', 'true');
 
   const query = `
     query($id: String!) {
@@ -436,40 +575,41 @@ async function openCharacterDetails(char) {
   try {
     const data = await fetchGraphQL(query, { id: String(char.id) });
 
-    // FIX: игнорируем устаревший ответ.
     if (mySeq !== detailsSeq) return;
 
     const details = data.characters && data.characters[0];
 
     if (details) {
       let desc = details.description || 'Описание отсутствует.';
-      
-      // FIX: сначала экранируем ВСЁ, потом добавляем свои теги-ссылки.
-      // Раньше имя из API вставлялось в href/innerHTML без проверки → XSS.
       desc = escapeHtml(desc);
 
-      // Заменяем уже на экранированном тексте — теги безопасны, т.к. мы сами их пишем.
       desc = desc.replace(/\[character=(\d+)\](.*?)\[\/character\]/g, (match, id, name) => {
-        return `<a href="https://shikimori.io/characters/${encodeURIComponent(id)}" target="_blank" rel="noopener noreferrer" style="color: #818cf8; text-decoration: underline;">${name}</a>`;
+        return `<a href="https://shikimori.io/characters/${encodeURIComponent(id)}" target="_blank" rel="noopener noreferrer" style="color: #a5b4fc; text-decoration: underline;">${name}</a>`;
       });
       desc = desc.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/g, '<span style="background: #334155; padding: 2px 6px; border-radius: 4px;">$1</span>');
 
       modalDesc.innerHTML = desc.replace(/\n/g, '<br>');
-      
       modalRefs.innerHTML = '';
-      
+
       const posterUrl = details.poster?.originalUrl;
       if (posterUrl) {
         const validPoster = getValidImageUrl(posterUrl);
         const refEl = document.createElement('div');
         refEl.className = 'ref-item';
+        refEl.setAttribute('role', 'listitem');
         refEl.title = 'Основной постер';
         const imgEl = document.createElement('img');
         imgEl.src = validPoster;
-        imgEl.alt = 'poster';
+        imgEl.alt = 'Основной постер персонажа';
         imgEl.loading = 'lazy';
-        // FIX: обработчик через addEventListener, а не inline onclick с URL из API.
+        imgEl.tabIndex = 0;
         imgEl.addEventListener('click', () => window.open(validPoster, '_blank', 'noopener'));
+        imgEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            window.open(validPoster, '_blank', 'noopener');
+          }
+        });
         attachImgFallback(imgEl);
         refEl.appendChild(imgEl);
         modalRefs.appendChild(refEl);
@@ -478,12 +618,20 @@ async function openCharacterDetails(char) {
       if (char.image && char.image !== MISSING_IMG) {
         const refEl = document.createElement('div');
         refEl.className = 'ref-item';
+        refEl.setAttribute('role', 'listitem');
         refEl.title = 'Портрет';
         const imgEl = document.createElement('img');
         imgEl.src = char.image;
-        imgEl.alt = 'portrait';
+        imgEl.alt = 'Портрет персонажа';
         imgEl.loading = 'lazy';
+        imgEl.tabIndex = 0;
         imgEl.addEventListener('click', () => window.open(char.image, '_blank', 'noopener'));
+        imgEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            window.open(char.image, '_blank', 'noopener');
+          }
+        });
         attachImgFallback(imgEl);
         refEl.appendChild(imgEl);
         modalRefs.appendChild(refEl);
@@ -493,12 +641,22 @@ async function openCharacterDetails(char) {
       const yandexUrl = `https://yandex.ru/images/search?text=${encodeURIComponent(charName + ' арт')}`;
       const searchRef = document.createElement('div');
       searchRef.className = 'ref-item';
+      searchRef.setAttribute('role', 'listitem');
+      searchRef.setAttribute('tabindex', '0');
+      searchRef.setAttribute('role', 'button');
+      searchRef.setAttribute('aria-label', 'Искать больше в Яндекс Картинках');
       searchRef.title = 'Искать больше в Яндекс Картинках';
       searchRef.style.cssText = 'cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111827; text-align:center; padding:5px;';
       searchRef.innerHTML = `
-        <span style="font-size:18px;">🔍</span>
-        <span style="font-size:9px; color:#818cf8; margin-top:4px;">Ещё в Яндекс ↗</span>`;
+        <span style="font-size:18px;" aria-hidden="true">🔍</span>
+        <span style="font-size:9px; color:#a5b4fc; margin-top:4px;">Ещё в Яндекс ↗</span>`;
       searchRef.addEventListener('click', () => window.open(yandexUrl, '_blank', 'noopener'));
+      searchRef.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          window.open(yandexUrl, '_blank', 'noopener');
+        }
+      });
       modalRefs.appendChild(searchRef);
 
     } else {
@@ -509,14 +667,18 @@ async function openCharacterDetails(char) {
     if (mySeq !== detailsSeq) return;
     modalDesc.textContent = 'Ошибка загрузки: ' + e.message;
     modalRefs.innerHTML = '';
+  } finally {
+    if (modalContent) modalContent.setAttribute('aria-busy', 'false');
   }
 }
 
 function closeModal(e) {
   if (!e || e.target.id === 'charModal' || e.target.classList.contains('modal-close')) {
-    document.getElementById('charModal').classList.add('hidden');
+    closeModalById('charModal');
   }
 }
+
+/* ---------- Экспорт ---------- */
 
 function exportJSON() {
   if (!currentAnime || !allCharacters.length) return;
@@ -530,7 +692,6 @@ function exportJSON() {
   a.download = `shikimori_${currentAnime.id}.json`;
   document.body.appendChild(a);
   a.click();
-  // FIX: освобождаем blob URL и убираем элемент.
   setTimeout(() => {
     URL.revokeObjectURL(a.href);
     a.remove();
