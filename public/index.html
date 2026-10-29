@@ -62,11 +62,12 @@ button:disabled{background:#999}
 
 <script>
 const SHIKI_API = "/api/shiki/graphql";
+const MISSING_IMG = "https://shikimori.io/assets/globals/missing_original.jpg";
 let currentAnime = null;
 let allCharacters = [];
 
 function getValidImageUrl(url) {
-  if (!url || url.includes('missing')) return null;
+  if (!url || url.includes('missing')) return MISSING_IMG;
   return url;
 }
 
@@ -127,14 +128,9 @@ async function searchAnime() {
       card.onclick = () => selectAnime(anime, card);
       
       const imgSrc = getValidImageUrl(anime.poster?.originalUrl);
-      const initial = (anime.russian || anime.name || '?').charAt(0).toUpperCase();
-
-      const imgHtml = imgSrc 
-        ? `<img src="${imgSrc}" alt="" onerror="this.parentElement.innerHTML='<div class=\\'char-placeholder\\'>${initial}</div>'">`
-        : `<div class="char-img-wrap" style="height:250px;"><div class="char-placeholder">${initial}</div></div>`;
 
       card.innerHTML = `
-        ${imgHtml}
+        <img src="${imgSrc}" alt="" onerror="this.style.display='none'">
         <h3>${anime.russian || anime.name}</h3>
         <p>${anime.name}</p>
         <p><span class="badge">${anime.kind || '?'}</span> ${anime.airedOn?.year || ''} • ${anime.status || ''}</p>`;
@@ -174,7 +170,6 @@ async function loadCharacters() {
   btn.disabled = true; loader.classList.remove('hidden'); grid.innerHTML = '';
   progressBar.style.width = '0%'; progressText.textContent = 'Загрузка...';
 
-  // Убираем несуществующее поле person из GraphQL-запроса
   const query = `
     query($id: String!) {
       animes(ids: $id) {
@@ -249,14 +244,9 @@ function renderCharacters() {
   list.slice(0, 200).forEach(c => {
     const card = document.createElement('div');
     card.className = 'char-card';
-    const initial = (c.russian || c.name || '?').charAt(0).toUpperCase();
-    
-    const imgHtml = c.image 
-      ? `<img src="${c.image}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'char-placeholder\\'>${initial}</div>'">`
-      : `<div class="char-placeholder">${initial}</div>`;
     
     card.innerHTML = `
-      <div class="char-img-wrap">${imgHtml}</div>
+      <div class="char-img-wrap"><img src="${c.image}" alt="" loading="lazy"></div>
       <div class="char-info">
         <div class="char-name">${c.russian || c.name || 'Не указано'}</div>
         <div class="char-role">${c.role || 'Не указано'}</div>
