@@ -1,64 +1,57 @@
-from http.server import BaseHTTPRequestHandler
+from flask import Flask, request, Response
 import urllib.request
 import urllib.error
 import json
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.handle_request(method='GET')
+app = Flask(__name__)
 
-    def do_POST(self):
-        self.handle_request(method='POST')
+@app.route('/api/shiki/<path:subpath>', methods=['GET', 'POST', 'OPTIONS'])
+@app.route('/api/shiki', defaults={'subpath': ''}, methods=['GET', 'POST', 'OPTIONS'])
+def proxy(subpath):
+    if request.method == 'OPTIONS':
+        response = Response()
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        return response
 
-    def handle_request(self, method):
-        try:
-            path = self.path
-            if path.startswith('/api/shiki'):
-                target_path = path.replace('/api/shiki', '')
-            else:
-                target_path = path
+    if subpath == 'graphql' or subpath.startswith('graphql'):
+        target_url = 'https://shikimori.io/api/graphql'
+    else:
+        target_url = 'https://shikimori.io/api'
+        if subpath:
+            target_url += '/' + subpath
 
-            if target_path.startswith('/graphql'):
-                url = 'https://shikimori.io/api/graphql'
-            else:
-                url = 'https://shikimori.io/api' + target_path
+    data = None
+    if request.method == 'POST':
+        data = request.get_data()
 
-            body = None
-            if method == 'POST':
-                content_length = int(self.headers.get('Content-Length', 0))
-                if content_length > 0:
-                    body = self.rfile.read(content_length)
+    req = urllib.request.Request(target_url, data=data, method=request.method)
+    req.add_header('User-Agent', 'ShikimoriFinderApp/2.0 (contact@example.com)')
+    if request.method == 'POST':
+        req.add_header('Content-Type', 'application/json')
 
-            req = urllib.request.Request(url, data=body, method=method)
-            req.add_header('User-Agent', 'ShikimoriFinderApp/2.0 (contact@example.com)')
-            if method == 'POST':
-                req.add_header('Content-Type', 'application/json')
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            res_data = r.read()
+            response = Response(res_data, status=200)
+            response.headers['Content-Type'] = 'application/json'
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            return response
+    except urllib.error.HTTPError as e:
+        return Response(
+            json.dumps({'error': f'HTTP Error {e.code}: {e.reason}'}),
+            status=e.code,
+            mimetype='application/json',
+            headers={'Access-Control-Allow-Origin': '*'}
+        )
+    except Exception as e:
+        return Response(
+            json.dumps({'error': str(e)}),
+            status=500,
+            mimetype='application/json',
+            headers={'Access-Control-Allow-Origin': '*'}
+        )
 
-            with urllib.request.urlopen(req, timeout=15) as r:
-                data = r.read()
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
-                self.end_headers()
-                self.wfile.write(data)
-
-        except urllib.error.HTTPError as e:
-            error_body = e.read()
-            self.send_response(e.code)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': f'HTTP Error {e.code}: {e.reason}'}).encode())
-        except Exception as e:
-            self.send_response(500)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
-
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+if __name__ == '__main__':
+    app.run()
