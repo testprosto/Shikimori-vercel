@@ -273,7 +273,7 @@ button:disabled { background: var(--border); cursor: not-allowed; color: var(--t
 
 .references-section h3 { font-size: 15px; margin-bottom: 10px; }
 
-/* Лента референсов с возможностью прокрутки вправо */
+/* Лента референсов с прокруткой вправо */
 .refs-scroll-container {
   display: flex;
   gap: 10px;
