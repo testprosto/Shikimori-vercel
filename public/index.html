@@ -58,7 +58,7 @@
   </div>
 </div>
 
-<!-- Модальное окно с деталями персонажа и лентой артов -->
+<!-- Модальное окно с деталями персонажа и кнопками источников артов -->
 <div id="charModal" class="modal-overlay hidden" onclick="closeModal(event)">
   <div class="modal-content" onclick="event.stopPropagation()">
     <button class="modal-close" onclick="closeModal()">×</button>
@@ -74,7 +74,7 @@
     <div class="modal-description" id="modalDesc">Загрузка описания...</div>
     
     <div class="references-section">
-      <h3>Официальный постер и базы артов (прокрутите вправо ➔)</h3>
+      <h3>Источники артов и референсов</h3>
       <div id="modalRefs" class="refs-scroll-container">
         <span style="font-size: 12px; color: var(--text-muted);">Загрузка...</span>
       </div>
@@ -345,7 +345,7 @@ async function openCharacterDetails(char) {
   modalLink.href = cleanUrl;
 
   modalDesc.textContent = 'Загрузка описания...';
-  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>';
+  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка источников...</span>';
   
   modal.classList.remove('hidden');
 
@@ -355,7 +355,6 @@ async function openCharacterDetails(char) {
         description
         russian
         name
-        poster { originalUrl }
       }
     }
   `;
@@ -374,35 +373,24 @@ async function openCharacterDetails(char) {
       
       modalRefs.innerHTML = '';
       
-      // 1. Официальный постер из Shikimori
-      const posterUrl = details.poster?.originalUrl;
-      if (posterUrl) {
-        const validPoster = getValidImageUrl(posterUrl);
-        modalRefs.innerHTML += `
-          <div class="ref-item" title="Официальный постер Shikimori">
-            <img src="${validPoster}" alt="Shikimori" loading="lazy" onclick="window.open('${validPoster}', '_blank')">
-            <span style="position: absolute; bottom: 2px; left: 2px; background: rgba(0,0,0,0.8); color: #818cf8; font-size: 9px; padding: 1px 4px; border-radius: 3px;">Shikimori</span>
-          </div>`;
-      }
-
       const nameRu = details.russian || details.name;
       const tagEn = (details.name || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
 
-      // 2. Карточки для быстрого доступа к базам артов с названиями сайтов
+      // Плашки со всеми запрошенными иконками и текстом
       const platforms = [
-        { name: 'Danbooru', color: '#003366', icon: '🎨', url: `https://danbooru.donmai.us/posts?tags=${tagEn}` },
-        { name: 'Gelbooru', color: '#006699', icon: '🖼️', url: `https://gelbooru.com/index.php?page=post&s=list&tags=${tagEn}` },
-        { name: 'Yande.re', color: '#b91c1c', icon: '✨', url: `https://yande.re/post?tags=${tagEn}` },
-        { name: 'Safebooru', color: '#15803d', icon: '🌿', url: `https://safebooru.org/index.php?page=post&s=list&tags=${tagEn}` },
-        { name: 'Pinterest', color: '#e60023', icon: '📌', url: `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(nameRu + ' арт')}` },
-        { name: 'Яндекс Арты', color: '#fc3f1d', icon: '🔍', url: `https://yandex.ru/images/search?text=${encodeURIComponent(nameRu + ' арт аниме')}` }
+        { name: 'Danbooru ↗', icon: '🎨', url: `https://danbooru.donmai.us/posts?tags=${tagEn}` },
+        { name: 'Gelbooru ↗', icon: '🖼️', url: `https://gelbooru.com/index.php?page=post&s=list&tags=${tagEn}` },
+        { name: 'Yande.re ↗', icon: '✨', url: `https://yande.re/post?tags=${tagEn}` },
+        { name: 'Safebooru ↗', icon: '🌿', url: `https://safebooru.org/index.php?page=post&s=list&tags=${tagEn}` },
+        { name: 'Pinterest ↗', icon: '📌', url: `https://www.pinterest.com/search/pins/?q=${encodeURIComponent(nameRu + ' арт')}` },
+        { name: 'Яндекс Арты ↗', icon: '🔍', url: `https://yandex.ru/images/search?text=${encodeURIComponent(nameRu + ' арт аниме')}` }
       ];
 
       platforms.forEach(p => {
         modalRefs.innerHTML += `
-          <div class="ref-item" onclick="window.open('${p.url}', '_blank')" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111827; border: 1px solid var(--border); text-align:center; padding:6px; transition: border-color 0.2s;" title="Смотреть арты на ${p.name}">
-            <span style="font-size:20px;">${p.icon}</span>
-            <span style="font-size:10px; color:${p.color}; font-weight:600; margin-top:4px;">${p.name} ↗</span>
+          <div class="ref-item" onclick="window.open('${p.url}', '_blank')" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111827; border: 1px solid var(--border); text-align:center; padding:8px; border-radius:8px; min-width: 95px; transition: border-color 0.2s, background 0.2s;" onmouseover="this.style.borderColor='#6366f1'" onmouseout="this.style.borderColor='var(--border)'" title="Открыть ${p.name}">
+            <span style="font-size:22px; margin-bottom:4px;">${p.icon}</span>
+            <span style="font-size:11px; color:#818cf8; font-weight:600; white-space:nowrap;">${p.name}</span>
           </div>`;
       });
 
