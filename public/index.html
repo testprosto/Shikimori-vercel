@@ -43,7 +43,7 @@
   </div>
 </div>
 
-<!-- Модальное окно с деталями персонажа и референсами -->
+<!-- Модальное окно с деталями персонажа, описанием и пролистываемыми референсами -->
 <div id="charModal" class="modal-overlay hidden" onclick="closeModal(event)">
   <div class="modal-content" onclick="event.stopPropagation()">
     <button class="modal-close" onclick="closeModal()">×</button>
@@ -59,9 +59,13 @@
     <div class="modal-description" id="modalDesc">Загрузка описания...</div>
     
     <div class="references-section">
-      <h3>Референсы и арты (включая сторонние сайты)</h3>
-      <div id="modalRefs" class="refs-grid">
-        <span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>
+      <h3>Референсы и арты</h3>
+      <div class="references-container">
+        <button class="slider-btn" onclick="scrollSlider(-1)">‹</button>
+        <div id="modalRefs" class="refs-slider">
+          <span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>
+        </div>
+        <button class="slider-btn" onclick="scrollSlider(1)">›</button>
       </div>
     </div>
   </div>
@@ -296,7 +300,7 @@ function renderCharacters() {
   });
   
   if (list.length > 200) {
-    const more = document.createElement('p');
+    const more = document.exports = document.createElement('p');
     more.style.gridColumn = '1/-1';
     more.style.color = 'var(--text-muted)';
     more.style.textAlign = 'center';
@@ -305,7 +309,7 @@ function renderCharacters() {
   }
 }
 
-// Автоматическая замена тегов [character=ID] на имена и добавление ссылок на сторонние сайты с артами
+// Загрузка деталей персонажа вместе с галереей (картинками-референсами) через GraphQL
 async function openCharacterDetails(char) {
   const modal = document.getElementById('charModal');
   const modalImg = document.getElementById('modalImg');
@@ -320,10 +324,11 @@ async function openCharacterDetails(char) {
   modalRole.textContent = `Роль: ${char.role}`;
   modalLink.href = char.url ? `https://shikimori.io${char.url}` : '#';
   modalDesc.textContent = 'Загрузка описания...';
-  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>';
+  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка артов...</span>';
   
   modal.classList.remove('hidden');
 
+  // Запрашиваем описание, постер и галерею картинок (если доступна)
   const query = `
     query($id: String!) {
       characters(ids: $id) {
@@ -331,6 +336,7 @@ async function openCharacterDetails(char) {
         russian
         name
         poster { originalUrl }
+        otherImages { originalUrl }
       }
     }
   `;
@@ -342,45 +348,51 @@ async function openCharacterDetails(char) {
     if (details) {
       let desc = details.description || 'Описание отсутствует.';
       
-      // Автоматическая замена тегов [character=ID]Текст[/character] на кликабельные ссылки или имена
+      // Автоматическая замена тегов [character=ID] на кликабельные имена
       desc = desc.replace(/\[character=(\d+)\](.*?)\[\/character\]/g, (match, id, name) => {
         return `<a href="https://shikimori.io/characters/${id}" target="_blank" style="color: #818cf8; text-decoration: underline;">${name}</a>`;
       });
-      // Замена простых тегов [spoiler]...[/spoiler]
       desc = desc.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/g, '<span style="background: #334155; padding: 2px 6px; border-radius: 4px;">$1</span>');
 
       modalDesc.innerHTML = desc.replace(/\n/g, '<br>');
       
-      // Формируем блок референсов (постер + ссылки на внешние каталоги артов)
+      // Заполняем карусель референсов
       modalRefs.innerHTML = '';
-      const posterUrl = details.poster?.originalUrl;
       
-      if (posterUrl) {
-        const validPoster = getValidImageUrl(posterUrl);
-        modalRefs.innerHTML += `
-          <div class="ref-item" title="Официальный постер">
-            <img src="${validPoster}" alt="poster" loading="lazy" onclick="window.open('${validPoster}', '_blank')">
-          </div>`;
+      let allImages = [];
+      if (details.poster?.originalUrl) allImages.push(details.poster.originalUrl);
+      if (details.otherImages && Array.isArray(details.otherImages)) {
+        details.otherImages.forEach(img => {
+          if (img.originalUrl) allImages.push(img.originalUrl);
+        });
       }
 
-      // Ссылки на сторонние площадки для поиска артов
-      const searchName = encodeURIComponent(details.russian || details.name);
-      modalRefs.innerHTML += `
-        <div class="ref-item" style="display:flex; align-items:center; justify-content:center; background:#111827; padding:5px; text-align:center;">
-          <a href="https://yandex.ru/images/search?text=${searchName} арт" target="_blank" style="font-size:11px; color:#818cf8; text-decoration:none;">Яндекс Картинки ↗</a>
-        </div>
-        <div class="ref-item" style="display:flex; align-items:center; justify-content:center; background:#111827; padding:5px; text-align:center;">
-          <a href="https://sankakucomplex.com" target="_blank" style="font-size:11px; color:#818cf8; text-decoration:none;">Sankaku (Арты) ↗</a>
-        </div>`;
+      if (allImages.length > 0) {
+        allImages.forEach(imgUrl => {
+          const validUrl = getValidImageUrl(imgUrl);
+          const slide = document.createElement('div');
+          slide.className = 'ref-slide-item';
+          slide.innerHTML = `<img src="${validUrl}" alt="art" loading="lazy" onclick="window.open('${validUrl}', '_blank')">`;
+          modalRefs.appendChild(slide);
+        });
+      } else {
+        modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Дополнительные референсы отсутствуют.</span>';
+      }
 
     } else {
       modalDesc.textContent = 'Не удалось загрузить подробную информацию.';
-      modalRefs.innerHTML = '';
+      modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Нет данных</span>';
     }
   } catch(e) {
     modalDesc.textContent = 'Ошибка загрузки: ' + e.message;
-    modalRefs.innerHTML = '';
+    modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Ошибка</span>';
   }
+}
+
+// Функция пролистывания слайдера референсов вправо/влево при нажатии на стрелочки
+function scrollSlider(direction) {
+  const slider = document.getElementById('modalRefs');
+  slider.scrollBy({ left: direction * 150, behavior: 'smooth' });
 }
 
 function closeModal(e) {
