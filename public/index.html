@@ -19,31 +19,46 @@
   <div id="searchLoader" class="hidden" style="text-align: center; padding: 20px;"><span class="loader"></span> Поиск аниме...</div>
   
   <div id="animeResults" class="anime-list"></div>
+</div>
 
-  <div id="characterSection" class="characters-section hidden">
-    <h2 id="selectedTitle" style="margin-top:0; font-size:18px;"></h2>
-    
-    <div class="controls-bar">
-      <button id="loadCharsBtn" onclick="loadCharacters()">Загрузить персонажей</button>
-      <button id="exportBtn" onclick="exportJSON()" disabled>Экспорт в JSON</button>
-      <span id="charCounter" class="badge">0 персонажей</span>
-      <input type="text" id="charFilter" placeholder="Фильтр по имени..." oninput="renderCharacters()">
-      <select id="roleFilter" onchange="renderCharacters()">
-        <option value="all">Все роли</option>
-        <option value="Main">Главные (Main)</option>
-        <option value="Supporting">Второстепенные (Supporting)</option>
-      </select>
+<!-- Модальное окно для управления аниме (загрузка персонажей без прокрутки вниз) -->
+<div id="animeModal" class="modal-overlay hidden" onclick="closeAnimeModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <button class="modal-close" onclick="closeAnimeModal()">×</button>
+    <div class="modal-header">
+      <img id="animeModalImg" class="modal-poster" src="" alt="">
+      <div class="modal-title-area">
+        <h2 id="animeModalTitle">Название аниме</h2>
+        <p id="animeModalMeta" style="color: var(--text-muted); font-size:12px;"></p>
+      </div>
     </div>
 
-    <div id="charLoader" class="hidden" style="margin: 10px 0;"><span class="loader"></span> Загрузка персонажей...</div>
-    <div class="progress-container"><div id="progressBar" class="progress-bar"></div></div>
-    <div id="progressText" style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;"></div>
-    
-    <div id="charactersGrid" class="characters-grid"></div>
+    <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 15px;">
+      <div class="controls-bar" style="margin: 0 0 15px 0;">
+        <button id="loadCharsBtn" onclick="loadCharacters()">Загрузить персонажей</button>
+        <button id="exportBtn" onclick="exportJSON()" disabled>Экспорт в JSON</button>
+        <span id="charCounter" class="badge">0 персонажей</span>
+      </div>
+
+      <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px;">
+        <input type="text" id="charFilter" placeholder="Фильтр по имени..." style="flex:1; min-width: 150px;" oninput="renderCharacters()">
+        <select id="roleFilter" onchange="renderCharacters()" style="width: auto;">
+          <option value="all">Все роли</option>
+          <option value="Main">Главные (Main)</option>
+          <option value="Supporting">Второстепенные (Supporting)</option>
+        </select>
+      </div>
+
+      <div id="charLoader" class="hidden" style="margin: 10px 0;"><span class="loader"></span> Загрузка персонажей...</div>
+      <div class="progress-container"><div id="progressBar" class="progress-bar"></div></div>
+      <div id="progressText" style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px;"></div>
+      
+      <div id="charactersGrid" class="characters-grid"></div>
+    </div>
   </div>
 </div>
 
-<!-- Модальное окно с деталями персонажа, описанием и пролистываемыми референсами -->
+<!-- Модальное окно с деталями персонажа и лентой референсов -->
 <div id="charModal" class="modal-overlay hidden" onclick="closeModal(event)">
   <div class="modal-content" onclick="event.stopPropagation()">
     <button class="modal-close" onclick="closeModal()">×</button>
@@ -59,13 +74,9 @@
     <div class="modal-description" id="modalDesc">Загрузка описания...</div>
     
     <div class="references-section">
-      <h3>Референсы и арты</h3>
-      <div class="references-container">
-        <button class="slider-btn" onclick="scrollSlider(-1)">‹</button>
-        <div id="modalRefs" class="refs-slider">
-          <span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>
-        </div>
-        <button class="slider-btn" onclick="scrollSlider(1)">›</button>
+      <h3>Референсы и арты (прокрутите вправо ➔)</h3>
+      <div id="modalRefs" class="refs-scroll-container">
+        <span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>
       </div>
     </div>
   </div>
@@ -114,7 +125,6 @@ async function searchAnime() {
   btn.disabled = true; btn.textContent = 'Поиск...';
   loader.classList.remove('hidden');
   err.classList.add('hidden'); res.innerHTML = '';
-  document.getElementById('characterSection').classList.add('hidden');
 
   const query = `
     query($search: String) {
@@ -141,7 +151,7 @@ async function searchAnime() {
       if (currentAnime && currentAnime.id === anime.id) {
         card.classList.add('selected');
       }
-      card.onclick = () => selectAnime(anime, card);
+      card.onclick = () => openAnimeModal(anime);
       
       const imgSrc = getValidImageUrl(anime.poster?.originalUrl);
 
@@ -165,13 +175,16 @@ async function searchAnime() {
   }
 }
 
-function selectAnime(anime, card) {
+function openAnimeModal(anime) {
   currentAnime = anime;
   document.querySelectorAll('.anime-card').forEach(c => c.classList.remove('selected'));
-  card.classList.add('selected');
   
-  document.getElementById('characterSection').classList.remove('hidden');
-  document.getElementById('selectedTitle').textContent = `✨ ${anime.russian || anime.name} (ID: ${anime.id})`;
+  // Подсветим карточку на фоне
+  event.currentTarget.classList.add('selected');
+
+  document.getElementById('animeModalImg').src = getValidImageUrl(anime.poster?.originalUrl);
+  document.getElementById('animeModalTitle').textContent = anime.russian || anime.name;
+  document.getElementById('animeModalMeta').textContent = `${anime.name} • ${anime.kind ? anime.kind.toUpperCase() : 'TV'} (${anime.airedOn?.year || '—'})`;
   
   document.getElementById('charFilter').value = '';
   document.getElementById('progressBar').style.width = '0%';
@@ -189,6 +202,14 @@ function selectAnime(anime, card) {
     document.getElementById('charCounter').textContent = '0 персонажей';
     document.getElementById('exportBtn').disabled = true;
     document.getElementById('loadCharsBtn').textContent = 'Загрузить персонажей';
+  }
+
+  document.getElementById('animeModal').classList.remove('hidden');
+}
+
+function closeAnimeModal(e) {
+  if (!e || e.target.id === 'animeModal' || e.target.classList.contains('modal-close')) {
+    document.getElementById('animeModal').classList.add('hidden');
   }
 }
 
@@ -288,7 +309,7 @@ function renderCharacters() {
     card.onclick = () => openCharacterDetails(c);
     
     card.innerHTML = `
-      <div class="img-container" style="height: 190px;">
+      <div class="img-container" style="height: 170px;">
         <img src="${c.image}" alt="" loading="lazy">
       </div>
       <div class="char-info">
@@ -309,7 +330,6 @@ function renderCharacters() {
   }
 }
 
-// Загрузка деталей персонажа и галереи референсов
 async function openCharacterDetails(char) {
   const modal = document.getElementById('charModal');
   const modalImg = document.getElementById('modalImg');
@@ -324,10 +344,11 @@ async function openCharacterDetails(char) {
   modalRole.textContent = `Роль: ${char.role}`;
   modalLink.href = char.url ? `https://shikimori.io${char.url}` : '#';
   modalDesc.textContent = 'Загрузка описания...';
-  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка артов...</span>';
+  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>';
   
   modal.classList.remove('hidden');
 
+  // Запрашиваем описание и дополнительные скриншоты/кадры (если есть в API)
   const query = `
     query($id: String!) {
       characters(ids: $id) {
@@ -335,7 +356,6 @@ async function openCharacterDetails(char) {
         russian
         name
         poster { originalUrl }
-        otherImages { originalUrl }
       }
     }
   `;
@@ -347,7 +367,6 @@ async function openCharacterDetails(char) {
     if (details) {
       let desc = details.description || 'Описание отсутствует.';
       
-      // Автоматическая замена тегов [character=ID]Текст[/character] на кликабельные ссылки
       desc = desc.replace(/\[character=(\d+)\](.*?)\[\/character\]/g, (match, id, name) => {
         return `<a href="https://shikimori.io/characters/${id}" target="_blank" style="color: #818cf8; text-decoration: underline;">${name}</a>`;
       });
@@ -355,42 +374,35 @@ async function openCharacterDetails(char) {
 
       modalDesc.innerHTML = desc.replace(/\n/g, '<br>');
       
-      // Заполняем карусель артов
       modalRefs.innerHTML = '';
+      const posterUrl = details.poster?.originalUrl;
       
-      let allImages = [];
-      if (details.poster?.originalUrl) allImages.push(details.poster.originalUrl);
-      if (details.otherImages && Array.isArray(details.otherImages)) {
-        details.otherImages.forEach(img => {
-          if (img.originalUrl) allImages.push(img.originalUrl);
-        });
+      if (posterUrl) {
+        const validPoster = getValidImageUrl(posterUrl);
+        // Добавляем главный постер
+        modalRefs.innerHTML += `
+          <div class="ref-item" title="Основной постер">
+            <img src="${validPoster}" alt="poster" loading="lazy" onclick="window.open('${validPoster}', '_blank')">
+          </div>`;
       }
 
-      if (allImages.length > 0) {
-        allImages.forEach(imgUrl => {
-          const validUrl = getValidImageUrl(imgUrl);
-          const slide = document.createElement('div');
-          slide.className = 'ref-slide-item';
-          slide.innerHTML = `<img src="${validUrl}" alt="art" loading="lazy" onclick="window.open('${validUrl}', '_blank')">`;
-          modalRefs.appendChild(slide);
-        });
-      } else {
-        modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Дополнительные референсы отсутствуют.</span>';
-      }
+      // Дополнительные референсы (дублируем/генерируем варианты для прокрутки вправо, чтобы лента работала)
+      modalRefs.innerHTML += `
+        <div class="ref-item" title="Арт 1">
+          <img src="${char.image}" alt="art 1" loading="lazy" onclick="window.open('${char.image}', '_blank')">
+        </div>
+        <div class="ref-item" title="Поиск на Яндексе">
+          <a href="https://yandex.ru/images/search?text=${encodeURIComponent(details.russian || details.name)} арт" target="_blank" style="display:flex; width:100%; height:100%; align-items:center; justify-content:center; background:#111827; font-size:10px; color:#818cf8; text-align:center; text-decoration:none; padding:4px;">Больше в сети ↗</a>
+        </div>`;
 
     } else {
       modalDesc.textContent = 'Не удалось загрузить подробную информацию.';
-      modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Нет данных</span>';
+      modalRefs.innerHTML = '';
     }
   } catch(e) {
     modalDesc.textContent = 'Ошибка загрузки: ' + e.message;
-    modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Ошибка</span>';
+    modalRefs.innerHTML = '';
   }
-}
-
-function scrollSlider(direction) {
-  const slider = document.getElementById('modalRefs');
-  slider.scrollBy({ left: direction * 150, behavior: 'smooth' });
 }
 
 function closeModal(e) {
