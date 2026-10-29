@@ -59,9 +59,9 @@
     <div class="modal-description" id="modalDesc">Загрузка описания...</div>
     
     <div class="references-section">
-      <h3>Референсы и арты</h3>
+      <h3>Референсы и арты (включая сторонние сайты)</h3>
       <div id="modalRefs" class="refs-grid">
-        <span style="font-size: 12px; color: var(--text-muted);">Загрузка референса...</span>
+        <span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>
       </div>
     </div>
   </div>
@@ -305,6 +305,7 @@ function renderCharacters() {
   }
 }
 
+// Автоматическая замена тегов [character=ID] на имена и добавление ссылок на сторонние сайты с артами
 async function openCharacterDetails(char) {
   const modal = document.getElementById('charModal');
   const modalImg = document.getElementById('modalImg');
@@ -319,7 +320,7 @@ async function openCharacterDetails(char) {
   modalRole.textContent = `Роль: ${char.role}`;
   modalLink.href = char.url ? `https://shikimori.io${char.url}` : '#';
   modalDesc.textContent = 'Загрузка описания...';
-  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка референса...</span>';
+  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>';
   
   modal.classList.remove('hidden');
 
@@ -339,18 +340,39 @@ async function openCharacterDetails(char) {
     const details = data.characters && data.characters[0];
 
     if (details) {
-      modalDesc.innerHTML = details.description ? details.description.replace(/\n/g, '<br>') : 'Описание отсутствует.';
+      let desc = details.description || 'Описание отсутствует.';
       
+      // Автоматическая замена тегов [character=ID]Текст[/character] на кликабельные ссылки или имена
+      desc = desc.replace(/\[character=(\d+)\](.*?)\[\/character\]/g, (match, id, name) => {
+        return `<a href="https://shikimori.io/characters/${id}" target="_blank" style="color: #818cf8; text-decoration: underline;">${name}</a>`;
+      });
+      // Замена простых тегов [spoiler]...[/spoiler]
+      desc = desc.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/g, '<span style="background: #334155; padding: 2px 6px; border-radius: 4px;">$1</span>');
+
+      modalDesc.innerHTML = desc.replace(/\n/g, '<br>');
+      
+      // Формируем блок референсов (постер + ссылки на внешние каталоги артов)
+      modalRefs.innerHTML = '';
       const posterUrl = details.poster?.originalUrl;
+      
       if (posterUrl) {
-        modalRefs.innerHTML = '';
-        const refDiv = document.createElement('div');
-        refDiv.className = 'ref-item';
-        refDiv.innerHTML = `<img src="${getValidImageUrl(posterUrl)}" alt="art" loading="lazy" onclick="window.open('${getValidImageUrl(posterUrl)}', '_blank')">`;
-        modalRefs.appendChild(refDiv);
-      } else {
-        modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Референсы отсутствуют.</span>';
+        const validPoster = getValidImageUrl(posterUrl);
+        modalRefs.innerHTML += `
+          <div class="ref-item" title="Официальный постер">
+            <img src="${validPoster}" alt="poster" loading="lazy" onclick="window.open('${validPoster}', '_blank')">
+          </div>`;
       }
+
+      // Ссылки на сторонние площадки для поиска артов
+      const searchName = encodeURIComponent(details.russian || details.name);
+      modalRefs.innerHTML += `
+        <div class="ref-item" style="display:flex; align-items:center; justify-content:center; background:#111827; padding:5px; text-align:center;">
+          <a href="https://yandex.ru/images/search?text=${searchName} арт" target="_blank" style="font-size:11px; color:#818cf8; text-decoration:none;">Яндекс Картинки ↗</a>
+        </div>
+        <div class="ref-item" style="display:flex; align-items:center; justify-content:center; background:#111827; padding:5px; text-align:center;">
+          <a href="https://sankakucomplex.com" target="_blank" style="font-size:11px; color:#818cf8; text-decoration:none;">Sankaku (Арты) ↗</a>
+        </div>`;
+
     } else {
       modalDesc.textContent = 'Не удалось загрузить подробную информацию.';
       modalRefs.innerHTML = '';
