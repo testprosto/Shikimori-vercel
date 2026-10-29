@@ -7,13 +7,9 @@ app = Flask(__name__)
 
 @app.route('/api/shiki/<path:subpath>', methods=['GET', 'POST', 'OPTIONS'])
 @app.route('/api/shiki', defaults={'subpath': ''}, methods=['GET', 'POST', 'OPTIONS'])
-def proxy(subpath):
+def shiki_proxy(subpath):
     if request.method == 'OPTIONS':
-        response = Response()
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-        return response
+        return cors_response()
 
     if subpath == 'graphql' or subpath.startswith('graphql'):
         target_url = 'https://shikimori.io/api/graphql'
@@ -22,13 +18,26 @@ def proxy(subpath):
         if subpath:
             target_url += '/' + subpath
 
-    data = None
-    if request.method == 'POST':
-        data = request.get_data()
+    return make_proxy_request(target_url, request)
 
-    req = urllib.request.Request(target_url, data=data, method=request.method)
-    req.add_header('User-Agent', 'ShikimoriFinderApp/2.0 (contact@example.com)')
-    if request.method == 'POST':
+@app.route('/api/proxy_external', methods=['GET', 'OPTIONS'])
+def external_proxy():
+    if request.method == 'OPTIONS':
+        return cors_response()
+    
+    target_url = request.args.get('url')
+    if not target_url:
+        return Response(json.dumps({'error': 'Missing url parameter'}), status=400, mimetype='application/json')
+
+    return make_proxy_request(target_url, request, is_external=True)
+
+def make_proxy_request(target_url, req_obj, is_external=False):
+    data = req_obj.get_data() if req_obj.method == 'POST' else None
+    req = urllib.request.Request(target_url, data=data, method=req_obj.method)
+    
+    # User-Agent обязателен для боору-сайтов и Shikimori
+    req.add_header('User-Agent', 'ShikimoriFinderApp/3.0 (contact@example.com)')
+    if req_obj.method == 'POST':
         req.add_header('Content-Type', 'application/json')
 
     try:
@@ -53,32 +62,12 @@ def proxy(subpath):
             headers={'Access-Control-Allow-Origin': '*'}
         )
 
-# Новый эндпоинт для получения артов из Safebooru без CORS проблем
-@app.route('/api/booru', methods=['GET'])
-def proxy_booru():
-    tag = request.args.get('tag', '').lower().replace(' ', '_')
-    if not tag:
-        return Response(json.dumps([]), mimetype='application/json', headers={'Access-Control-Allow-Origin': '*'})
-    
-    target_url = f"https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&limit=15&tags={tag}"
-    req = urllib.request.Request(target_url, headers={'User-Agent': 'ShikimoriFinderApp/2.0'})
-    
-    try:
-        with urllib.request.urlopen(req, timeout=10) as r:
-            posts = json.loads(r.read().decode('utf-8'))
-            images = []
-            for p in posts:
-                if 'directory' in p and 'image' in p:
-                    img_url = f"https://safebooru.org/images/{p['directory']}/{p['image']}"
-                    images.append(img_url)
-                elif 'file_url' in p:
-                    url = p['file_url']
-                    if url.startswith('//'):
-                        url = 'https:' + url
-                    images.append(url)
-            return Response(json.dumps(images), mimetype='application/json', headers={'Access-Control-Allow-Origin': '*'})
-    except Exception as e:
-        return Response(json.dumps([]), mimetype='application/json', headers={'Access-Control-Allow-Origin': '*'})
+def cors_response():
+    response = Response()
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
 
 if __name__ == '__main__':
     app.run()
