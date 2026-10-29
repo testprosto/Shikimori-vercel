@@ -263,7 +263,7 @@ async function loadCharacters() {
           name: ch.name,
           russian: ch.russian,
           image: getValidImageUrl(ch.poster?.originalUrl),
-          url: ch.url, // Сохраняем полный путь из API (например /characters/300215-hammel)
+          url: ch.url,
           role: roleName
         });
       }
@@ -321,7 +321,7 @@ function renderCharacters() {
   });
   
   if (list.length > 200) {
-    const more = document.format('p');
+    const more = document.createElement('p');
     more.style.gridColumn = '1/-1';
     more.style.color = 'var(--text-muted)';
     more.style.textAlign = 'center';
@@ -343,16 +343,14 @@ async function openCharacterDetails(char) {
   modalName.textContent = char.russian || char.name;
   modalRole.textContent = `Роль: ${char.role}`;
   
-  // ИСПРАВЛЕНИЕ ССЫЛКИ: корректная склейка домена и относительного пути из API
   const cleanUrl = char.url ? (char.url.startsWith('http') ? char.url : `https://shikimori.io${char.url}`) : '#';
   modalLink.href = cleanUrl;
 
   modalDesc.textContent = 'Загрузка описания...';
-  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка артов и референсов...</span>';
+  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка референсов...</span>';
   
   modal.classList.remove('hidden');
 
-  // Запрашиваем информацию о персонаже, его постер и все доступные скриншоты/кадры (если они поддерживаются)
   const query = `
     query($id: String!) {
       characters(ids: $id) {
@@ -360,7 +358,6 @@ async function openCharacterDetails(char) {
         russian
         name
         poster { originalUrl }
-        screenshots { originalUrl }
       }
     }
   `;
@@ -381,7 +378,6 @@ async function openCharacterDetails(char) {
       
       modalRefs.innerHTML = '';
       
-      // 1. Добавляем основной постер
       const posterUrl = details.poster?.originalUrl;
       if (posterUrl) {
         const validPoster = getValidImageUrl(posterUrl);
@@ -391,25 +387,20 @@ async function openCharacterDetails(char) {
           </div>`;
       }
 
-      // 2. Добавляем скриншоты/кадры из галереи Shikimori (если они есть)
-      const screenshots = details.screenshots || [];
-      if (screenshots.length > 0) {
-        screenshots.forEach((scr, index) => {
-          const scrUrl = getValidImageUrl(scr.originalUrl);
-          modalRefs.innerHTML += `
-            <div class="ref-item" title="Кадр / Арт ${index + 1}">
-              <img src="${scrUrl}" alt="art ${index + 1}" loading="lazy" onclick="window.open('${scrUrl}', '_blank')">
-            </div>`;
-        });
+      if (char.image && char.image !== MISSING_IMG) {
+        modalRefs.innerHTML += `
+          <div class="ref-item" title="Портрет">
+            <img src="${char.image}" alt="portrait" loading="lazy" onclick="window.open('${char.image}', '_blank')">
+          </div>`;
       }
 
-      // 3. Дублируем портрет для удобства прокрутки и добавляем кнопку внешнего поиска
+      const charName = details.russian || details.name;
       modalRefs.innerHTML += `
-        <div class="ref-item" title="Портрет">
-          <img src="${char.image}" alt="portrait" loading="lazy" onclick="window.open('${char.image}', '_blank')">
+        <div class="ref-item" title="Яндекс Картинки" style="display:flex; align-items:center; justify-content:center; background:#111827; text-align:center;">
+          <a href="https://yandex.ru/images/search?text=${encodeURIComponent(charName + ' арт')}" target="_blank" style="font-size:10px; color:#818cf8; text-decoration:none; padding:4px;">Яндекс Картинки ↗</a>
         </div>
-        <div class="ref-item" title="Поиск артов в сети" style="display:flex; align-items:center; justify-content:center; background:#111827; text-align:center;">
-          <a href="https://yandex.ru/images/search?text=${encodeURIComponent(details.russian || details.name)} арт" target="_blank" style="font-size:10px; color:#818cf8; text-decoration:none; padding:4px;">Яндекс Картинки ↗</a>
+        <div class="ref-item" title="Pinterest" style="display:flex; align-items:center; justify-content:center; background:#111827; text-align:center;">
+          <a href="https://www.pinterest.com/search/pins/?q=${encodeURIComponent(charName)}" target="_blank" style="font-size:10px; color:#f43f5e; text-decoration:none; padding:4px;">Pinterest ↗</a>
         </div>`;
 
     } else {
