@@ -300,7 +300,7 @@ function renderCharacters() {
   });
   
   if (list.length > 200) {
-    const more = document.exports = document.createElement('p');
+    const more = document.createElement('p');
     more.style.gridColumn = '1/-1';
     more.style.color = 'var(--text-muted)';
     more.style.textAlign = 'center';
@@ -309,7 +309,7 @@ function renderCharacters() {
   }
 }
 
-// Загрузка деталей персонажа вместе с галереей (картинками-референсами) через GraphQL
+// Загрузка деталей персонажа и галереи референсов
 async function openCharacterDetails(char) {
   const modal = document.getElementById('charModal');
   const modalImg = document.getElementById('modalImg');
@@ -328,7 +328,6 @@ async function openCharacterDetails(char) {
   
   modal.classList.remove('hidden');
 
-  // Запрашиваем описание, постер и галерею картинок (если доступна)
   const query = `
     query($id: String!) {
       characters(ids: $id) {
@@ -348,7 +347,7 @@ async function openCharacterDetails(char) {
     if (details) {
       let desc = details.description || 'Описание отсутствует.';
       
-      // Автоматическая замена тегов [character=ID] на кликабельные имена
+      // Автоматическая замена тегов [character=ID]Текст[/character] на кликабельные ссылки
       desc = desc.replace(/\[character=(\d+)\](.*?)\[\/character\]/g, (match, id, name) => {
         return `<a href="https://shikimori.io/characters/${id}" target="_blank" style="color: #818cf8; text-decoration: underline;">${name}</a>`;
       });
@@ -356,7 +355,7 @@ async function openCharacterDetails(char) {
 
       modalDesc.innerHTML = desc.replace(/\n/g, '<br>');
       
-      // Заполняем карусель референсов
+      // Заполняем карусель артов
       modalRefs.innerHTML = '';
       
       let allImages = [];
@@ -389,7 +388,6 @@ async function openCharacterDetails(char) {
   }
 }
 
-// Функция пролистывания слайдера референсов вправо/влево при нажатии на стрелочки
 function scrollSlider(direction) {
   const slider = document.getElementById('modalRefs');
   slider.scrollBy({ left: direction * 150, behavior: 'smooth' });
