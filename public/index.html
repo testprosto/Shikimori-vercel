@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>Shikimori Finder (Vercel + Jikan Fallback)</title>
+<title>Shikimori Finder (Vercel)</title>
 <style>
 body{font-family:system-ui;background:#f4f4f9;padding:20px;max-width:1200px;margin:0 auto}
 .search-box{display:flex;gap:10px;margin-bottom:15px}
@@ -63,12 +63,9 @@ button:disabled{background:#999}
 
 <script>
 const SHIKI = "/api/shiki";
-const SHIKI_IMG = "https://shikimori.one"; // Используем актуальный домен
+const SHIKI_IMG = "https://shikimori.io";
 let currentAnime = null;
 let allCharacters = [];
-
-// Кэш для запросов к Jikan API, чтобы не превышать лимиты (Rate Limit)
-const jikanCache = {};
 
 async function apiGet(path, params = {}) {
   const url = new URL(SHIKI + path, window.location.origin);
@@ -76,45 +73,6 @@ async function apiGet(path, params = {}) {
   const resp = await fetch(url.toString());
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
-}
-
-// Получение картинки через Jikan API (MyAnimeList) с задержкой от флуда
-async function getJikanImage(query) {
-  if (!query) return null;
-  if (jikanCache[query] !== undefined) return jikanCache[query];
-
-  try {
-    // Небольшая пауза между запросами к Jikan, чтобы не словить HTTP 429 (Too Many Requests)
-    await new Promise(resolve => setTimeout(resolve, 350));
-    
-    const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=1`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const imgUrl = data.data?.[0]?.images?.jpg?.large_image_url || null;
-    jikanCache[query] = imgUrl;
-    return imgUrl;
-  } catch (e) {
-    return null;
-  }
-}
-
-// Получение картинки персонажа через Jikan API по имени
-async function getJikanCharacterImage(charName) {
-  if (!charName) return null;
-  const cacheKey = 'char_' + charName;
-  if (jikanCache[cacheKey] !== undefined) return jikanCache[cacheKey];
-
-  try {
-    await new Promise(resolve => setTimeout(resolve, 350));
-    const res = await fetch(`https://api.jikan.moe/v4/characters?q=${encodeURIComponent(charName)}&limit=1`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const imgUrl = data.data?.[0]?.images?.jpg?.image_url || null;
-    jikanCache[cacheKey] = imgUrl;
-    return imgUrl;
-  } catch (e) {
-    return null;
-  }
 }
 
 async function searchAnime() {
@@ -128,45 +86,27 @@ async function searchAnime() {
   loader.classList.remove('hidden');
   err.classList.add('hidden'); res.innerHTML = '';
   document.getElementById('characterSection').classList.add('hidden');
-  
   try {
     const data = await apiGet('/animes', { search: q, limit: 10 });
     if (!data.length) { res.innerHTML = '<p>Ничего не найдено.</p>'; return; }
-    
-    for (const anime of data) {
+    data.forEach(anime => {
       const card = document.createElement('div');
       card.className = 'anime-card';
       card.onclick = () => selectAnime(anime, card);
-      
-      const rawImg = anime.image?.original || '';
-      const isMissing = !rawImg || rawImg.includes('missing');
-      const imgSrc = isMissing ? '' : SHIKI_IMG + rawImg;
-      const animeTitle = anime.russian || anime.name;
-
+      const imgSrc = anime.image?.original ? SHIKI_IMG + anime.image.original : '';
       card.innerHTML = `
-        <img src="${imgSrc}" alt="" onerror="handleAnimeError(this, '${anime.name.replace(/'/g, "\\'")}')">
-        <h3>${animeTitle}</h3>
+        <img src="${imgSrc}" alt="" onerror="this.style.display='none'">
+        <h3>${anime.russian || anime.name}</h3>
         <p>${anime.name}</p>
         <p><span class="badge">${anime.kind||'?'}</span> ${(anime.aired_on||'').slice(0,4)} • ${anime.status||''}</p>`;
       res.appendChild(card);
-    }
+    });
   } catch(e) {
     err.textContent = 'Ошибка поиска: ' + e.message;
     err.classList.remove('hidden');
   } finally { 
     btn.disabled = false; btn.textContent = 'Найти'; 
     loader.classList.add('hidden');
-  }
-}
-
-// Автоматический переключатель на Jikan, если картинка аниме недоступна/битая
-async function handleAnimeError(imgElement, animeName) {
-  imgElement.onerror = null; // Защита от бесконечного цикла
-  const jikanUrl = await getJikanImage(animeName);
-  if (jikanUrl) {
-    imgElement.src = jikanUrl;
-  } else {
-    imgElement.style.display = 'none';
   }
 }
 
@@ -206,13 +146,9 @@ async function loadCharacters() {
         const ch = role.character;
         if (!ch?.id) continue;
         if (!map.has(ch.id)) {
-          const rawImg = ch.image?.original || '';
-          const isMissing = !rawImg || rawImg.includes('missing');
           map.set(ch.id, {
-            id: ch.id, 
-            name: ch.name, 
-            russian: ch.russian,
-            image: isMissing ? null : SHIKI_IMG + rawImg,
+            id: ch.id, name: ch.name, russian: ch.russian,
+            image: ch.image?.original ? SHIKI_IMG + ch.image.original : null,
             url: ch.url ? SHIKI_IMG + ch.url : null,
             role: role.role,
             actors: (role.persons||[]).map(p => ({id:p.id, name:p.name, russian:p.russian}))
@@ -259,16 +195,10 @@ function renderCharacters() {
     const actors = c.actors.length ? c.actors.map(a => a.russian||a.name).join(', ') : 'Не указано';
     const initial = (c.russian || c.name || '?').charAt(0).toUpperCase();
     
-    // Если картинка от Shikimori есть — выводим её, но вешаем onerror для запроса в Jikan.
-    // Если картинки нет изначально (null), сразу рендерим блок с инициалом и фоном запрашиваем MAL.
-    let imgHtml = '';
-    if (c.image) {
-      imgHtml = `<img src="${c.image}" alt="" loading="lazy" onerror="handleCharError(this, '${c.name.replace(/'/g, "\\'")}', '${initial}')">`;
-    } else {
-      imgHtml = `<div class="char-placeholder">${initial}</div>`;
-      // Фоном запрашиваем из Jikan для персонажей без картинок
-      fetchAndApplyCharJikan(c.name, card);
-    }
+    // Если картинка есть — показываем её. Если нет или 404 — заглушка с инициалом.
+    const imgHtml = c.image 
+      ? `<img src="${c.image}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'char-placeholder\\'>${initial}</div>'">`
+      : `<div class="char-placeholder">${initial}</div>`;
     
     card.innerHTML = `
       <div class="char-img-wrap">${imgHtml}</div>
@@ -286,30 +216,6 @@ function renderCharacters() {
     more.style.gridColumn = '1/-1';
     more.textContent = `Показаны первые 200 из ${list.length}`;
     grid.appendChild(more);
-  }
-}
-
-// Обработка падения картинки персонажа от Шикимори -> подтягиваем из Jikan
-async function handleCharError(imgElement, charName, initial) {
-  imgElement.onerror = null;
-  const jikanUrl = await getJikanCharacterImage(charName);
-  if (jikanUrl) {
-    imgElement.src = jikanUrl;
-  } else {
-    // Если и там нет, оставляем красивый инициал
-    const wrap = imgElement.parentElement;
-    wrap.innerHTML = `<div class="char-placeholder">${initial}</div>`;
-  }
-}
-
-// Дополнительная функция для ленивой подгрузки персонажей без картинок
-async function fetchAndApplyCharJikan(charName, cardElement) {
-  const jikanUrl = await getJikanCharacterImage(charName);
-  if (jikanUrl) {
-    const wrap = cardElement.querySelector('.char-img-wrap');
-    if (wrap) {
-      wrap.innerHTML = `<img src="${jikanUrl}" alt="" loading="lazy">`;
-    }
   }
 }
 
