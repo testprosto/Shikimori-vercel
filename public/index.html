@@ -58,7 +58,7 @@
   </div>
 </div>
 
-<!-- Модальное окно с деталями персонажа и лентой референсов-картинок -->
+<!-- Модальное окно с деталями персонажа и артами из разных API -->
 <div id="charModal" class="modal-overlay hidden" onclick="closeModal(event)">
   <div class="modal-content" onclick="event.stopPropagation()">
     <button class="modal-close" onclick="closeModal()">×</button>
@@ -74,9 +74,9 @@
     <div class="modal-description" id="modalDesc">Загрузка описания...</div>
     
     <div class="references-section">
-      <h3>Референсы и арты (прокрутите вправо ➔)</h3>
+      <h3>Мульти-источники референсов (арты из разных API ➔)</h3>
       <div id="modalRefs" class="refs-scroll-container">
-        <span style="font-size: 12px; color: var(--text-muted);">Загрузка артов...</span>
+        <span style="font-size: 12px; color: var(--text-muted);">Загрузка картинок из Danbooru, Gelbooru, Safebooru и Jikan...</span>
       </div>
     </div>
   </div>
@@ -101,7 +101,6 @@ async function fetchGraphQL(query, variables = {}) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, variables })
   });
-
   const text = await resp.text();
   let result;
   try {
@@ -109,7 +108,6 @@ async function fetchGraphQL(query, variables = {}) {
   } catch (e) {
     throw new Error(`Сервер вернул не JSON: ${text.substring(0, 100)}`);
   }
-
   if (result.errors) throw new Error(result.errors[0].message);
   return result.data;
 }
@@ -346,12 +344,12 @@ async function openCharacterDetails(char) {
   const cleanUrl = char.url ? (char.url.startsWith('http') ? char.url : `https://shikimori.io${char.url}`) : '#';
   modalLink.href = cleanUrl;
 
-  modalDesc.textContent = 'Загрузка описания...';
-  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загрузка артов и референсов...</span>';
+  modalDesc.textContent = 'Загрузка описания и артов из внешних API...';
+  modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Загружаем с Danbooru, Gelbooru, Safebooru и Jikan...</span>';
   
   modal.classList.remove('hidden');
 
-  // 1. Загружаем описание с Shikimori
+  // 1. Загружаем официальное описание из Shikimori
   const query = `
     query($id: String!) {
       characters(ids: $id) {
@@ -363,73 +361,115 @@ async function openCharacterDetails(char) {
     }
   `;
 
-  // Запускаем параллельно запрос к Shikimori и запрос артов через наш новый прокси /api/booru
-  const searchTag = char.name ? char.name.split(' ')[0] : ''; // Берем первое имя для точного поиска на боору
-
   try {
-    const [shikiData, booruResp] = await Promise.all([
-      fetchGraphQL(query, { id: String(char.id) }),
-      fetch(`/api/booru?tag=${encodeURIComponent(searchTag)}`).then(r => r.json()).catch(() => [])
-    ]);
-
-    const details = shikiData.characters && shikiData.characters[0];
+    const data = await fetchGraphQL(query, { id: String(char.id) });
+    const details = data.characters && data.characters[0];
 
     if (details) {
       let desc = details.description || 'Описание отсутствует.';
-      
       desc = desc.replace(/\[character=(\d+)\](.*?)\[\/character\]/g, (match, id, name) => {
         return `<a href="https://shikimori.io/characters/${id}" target="_blank" style="color: #818cf8; text-decoration: underline;">${name}</a>`;
       });
       desc = desc.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/g, '<span style="background: #334155; padding: 2px 6px; border-radius: 4px;">$1</span>');
-
       modalDesc.innerHTML = desc.replace(/\n/g, '<br>');
-      
-      modalRefs.innerHTML = '';
-      
-      // 1. Добавляем официальный постер Shikimori
-      const posterUrl = details.poster?.originalUrl;
-      if (posterUrl) {
-        const validPoster = getValidImageUrl(posterUrl);
-        modalRefs.innerHTML += `
-          <div class="ref-item" title="Основной постер">
-            <img src="${validPoster}" alt="poster" loading="lazy" onclick="window.open('${validPoster}', '_blank')">
-          </div>`;
-      }
-
-      // 2. Добавляем портрет
-      if (char.image && char.image !== MISSING_IMG) {
-        modalRefs.innerHTML += `
-          <div class="ref-item" title="Портрет">
-            <img src="${char.image}" alt="portrait" loading="lazy" onclick="window.open('${char.image}', '_blank')">
-          </div>`;
-      }
-
-      // 3. Добавляем арты, найденные через /api/booru
-      if (booruResp && booruResp.length > 0) {
-        booruResp.forEach((imgUrl, idx) => {
-          modalRefs.innerHTML += `
-            <div class="ref-item" title="Арт ${idx + 1}">
-              <img src="${imgUrl}" alt="art ${idx + 1}" loading="lazy" onclick="window.open('${imgUrl}', '_blank')">
-            </div>`;
-        });
-      } else {
-        // Если боору ничего не нашел по тегу, показываем карточку поиска
-        const charName = details.russian || details.name;
-        modalRefs.innerHTML += `
-          <div class="ref-item" title="Искать больше в Яндекс Картинках" onclick="window.open('https://yandex.ru/images/search?text=${encodeURIComponent(charName + ' арт')}', '_blank')" style="cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111827; text-align:center; padding:5px;">
-            <span style="font-size:18px;">🔍</span>
-            <span style="font-size:9px; color:#818cf8; margin-top:4px;">Ещё в Яндекс ↗</span>
-          </div>`;
-      }
-
     } else {
-      modalDesc.textContent = 'Не удалось загрузить подробную информацию.';
-      modalRefs.innerHTML = '';
+      modalDesc.textContent = 'Описание отсутствует.';
     }
   } catch(e) {
-    modalDesc.textContent = 'Ошибка загрузки: ' + e.message;
-    modalRefs.innerHTML = '';
+    modalDesc.textContent = 'Не удалось загрузить описание.';
   }
+
+  // 2. Параллельно запрашиваем картинки со сторонних API через наш прокси
+  modalRefs.innerHTML = '';
+  
+  // Добавляем официальный постер Shikimori в начало
+  if (char.image && char.image !== MISSING_IMG) {
+    appendRefCard(modalRefs, char.image, 'Shikimori');
+  }
+
+  // Формируем тег поиска на английском (имя латиницей, например "maha")
+  const searchTag = (char.name || 'anime').toLowerCase().replace(/[^a-z0-9]/g, '_');
+
+  // Список внешних API для запроса
+  const apis = [
+    { name: 'Danbooru', url: `https://danbooru.donmai.us/posts.json?tags=${searchTag}&limit=5` },
+    { name: 'Gelbooru', url: `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&limit=5&tags=${searchTag}` },
+    { name: 'Safebooru', url: `https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&limit=5&tags=${searchTag}` },
+    { name: 'Jikan (MAL)', url: `https://api.jikan.moe/v4/characters?q=${encodeURIComponent(char.name)}` }
+  ];
+
+  // Выполняем запросы ко всем API параллельно
+  for (const api of apis) {
+    try {
+      const resp = await fetch(`/api/proxy_external?url=${encodeURIComponent(api.url)}`);
+      const json = await resp.json();
+      
+      let imagesFound = 0;
+
+      // Парсим ответ в зависимости от структуры конкретного сайта
+      if (api.name === 'Danbooru' && Array.isArray(json)) {
+        json.forEach(post => {
+          const imgUrl = post.large_file_url || post.file_url || post.preview_file_url;
+          if (imgUrl) {
+            appendRefCard(modalRefs, imgUrl, 'Danbooru');
+            imagesFound++;
+          }
+        });
+      } else if ((api.name === 'Gelbooru' || api.name === 'Safebooru') && json.post) {
+        json.post.forEach(post => {
+          const imgUrl = post.file_url || post.sample_url || post.preview_url;
+          if (imgUrl) {
+            appendRefCard(modalRefs, imgUrl, api.name);
+            imagesFound++;
+          }
+        });
+      } else if (api.name === 'Jikan (MAL)' && json.data) {
+        json.data.forEach(ch => {
+          const imgUrl = ch.images?.jpg?.image_url;
+          if (imgUrl) {
+            appendRefCard(modalRefs, imgUrl, 'Jikan (MAL)');
+            imagesFound++;
+          }
+        });
+      }
+
+      if (imagesFound === 0) {
+        // Если по точному тегу ничего не нашлось, выводим плашку с поиском
+        appendSearchCard(modalRefs, api.name, `https://yandex.ru/images/search?text=${encodeURIComponent(char.russian || char.name + ' арт')}`);
+      }
+    } catch (err) {
+      console.error(`Ошибка загрузки с ${api.name}:`, err);
+    }
+  }
+
+  if (modalRefs.innerHTML.trim() === '') {
+    modalRefs.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">Не удалось загрузить референсы из внешних API.</span>';
+  }
+}
+
+// Функция для добавления красивой карточки с картинкой и подписью сайта
+function appendRefCard(container, imgUrl, sourceName) {
+  const div = document.createElement('div');
+  div.className = 'ref-item';
+  div.style.position = 'relative';
+  div.innerHTML = `
+    <img src="${imgUrl}" alt="${sourceName}" loading="lazy" onclick="window.open('${imgUrl}', '_blank')">
+    <span style="position: absolute; bottom: 2px; left: 2px; background: rgba(0,0,0,0.7); color: #818cf8; font-size: 9px; padding: 1px 4px; border-radius: 3px;">${sourceName}</span>
+  `;
+  container.appendChild(div);
+}
+
+// Функция для добавления карточки-ссылки, если на сайте нет картинок по точечному тегу
+function appendSearchCard(container, sourceName, searchUrl) {
+  const div = document.createElement('div');
+  div.className = 'ref-item';
+  div.style.cssText = 'display:flex; flex-direction:column; align-items:center; justify-content:center; background:#111827; text-align:center; padding:4px; cursor:pointer;';
+  div.onclick = () => window.open(searchUrl, '_blank');
+  div.innerHTML = `
+    <span style="font-size:14px;">🔍</span>
+    <span style="font-size:9px; color:#818cf8; margin-top:2px;">${sourceName}</span>
+  `;
+  container.appendChild(div);
 }
 
 function closeModal(e) {
