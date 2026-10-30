@@ -1,1 +1,0 @@
-# Shikimori-vercel
