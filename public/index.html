@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shikimori Finder Hub</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <h1>✨ Shikimori Finder Hub</h1>
+  <div class="search-box" role="search" aria-label="Поиск аниме">
+    <label for="searchInput" class="sr-only">Название аниме</label>
+    <input type="text" id="searchInput" value="The World's Finest Assassin" placeholder="Введите название аниме..." autocomplete="off">
+    <button id="searchBtn" type="button" onclick="searchAnime()">Найти</button>
+  </div>
+  <div id="error" class="error hidden" role="alert"></div>
+  <div id="searchLoader" class="hidden" style="text-align:center;padding:20px"><span class="loader"></span> Поиск аниме...</div>
+  <div id="animeResults" class="anime-list" aria-live="polite"></div>
+</div>
+
+<div id="animeModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="animeModalTitle" onclick="closeAnimeModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <button class="modal-close" onclick="closeAnimeModal()" aria-label="Закрыть">×</button>
+    <div class="modal-header">
+      <img id="animeModalImg" class="modal-poster" src="" alt="Постер аниме">
+      <div class="modal-title-area"><h2 id="animeModalTitle">Название аниме</h2><p id="animeModalMeta"></p></div>
+    </div>
+    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:15px">
+      <div class="controls-bar" style="margin:0 0 15px">
+        <button id="loadCharsBtn" onclick="loadCharacters()">Загрузить персонажей</button>
+        <button id="exportBtn" onclick="exportJSON()" disabled>Экспорт в JSON</button>
+        <span id="charCounter" class="badge">0 персонажей</span>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:15px">
+        <input type="text" id="charFilter" placeholder="Фильтр по имени..." style="flex:1;min-width:150px" oninput="renderCharacters()">
+        <select id="roleFilter" onchange="renderCharacters()" style="width:auto">
+          <option value="all">Все роли</option><option value="Main">Главные (Main)</option><option value="Supporting">Второстепенные (Supporting)</option>
+        </select>
+      </div>
+      <div id="charLoader" class="hidden"><span class="loader"></span> Загрузка персонажей...</div>
+      <div class="progress-container"><div id="progressBar" class="progress-bar"></div></div>
+      <div id="progressText" style="font-size:12px;color:var(--text-muted);margin-bottom:15px"></div>
+      <div id="charactersGrid" class="characters-grid"></div>
+    </div>
+  </div>
+</div>
+
+<div id="charModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modalName" onclick="closeModal(event)">
+  <div class="modal-content" onclick="event.stopPropagation()">
+    <button class="modal-close" onclick="closeModal()" aria-label="Закрыть">×</button>
+    <div class="modal-header">
+      <img id="modalImg" class="modal-poster" src="" alt="Портрет персонажа">
+      <div class="modal-title-area">
+        <h2 id="modalName">Имя персонажа</h2><p id="modalRole"></p>
+        <a id="modalLink" href="#" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#a5b4fc">Открыть на Shikimori ↗</a>
+      </div>
+    </div>
+    <div class="modal-description" id="modalDesc">Загрузка описания...</div>
+    <div class="references-section">
+      <h3>Референсы и арты</h3>
+      <div class="ref-tools" id="refTools"></div>
+      <div id="refStatus" class="ref-status" aria-live="polite">Подготовка источников...</div>
+      <div id="modalRefs" class="refs-scroll-container" role="list" aria-label="Галерея референсов персонажа">
+        <span class="ref-status">Загрузка референсов...</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SHIKI_API = "/api/shiki/graphql";
+const REFS_API = "/api/refs";
+const MISSING_IMG = "missing.jpg";
+let currentAnime = null;
+let allCharacters = [];
+let detailsSeq = 0;
+let searchController = null;
+const charactersCache = new Map();
+const CACHE_LIMIT = 50;
+const lastFocus = {anime:null,char:null};
+
+function escapeHtml(v){return v==null?"":String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;")}
+function getValidImageUrl(url){return !url||url.includes("missing")?MISSING_IMG:url}
+function attachImgFallback(img){img.addEventListener("error",function handler(){img.removeEventListener("error",handler);img.src=MISSING_IMG})}
+function openModal(id,trigger){const modal=document.getElementById(id),key=id==="animeModal"?"anime":"char";lastFocus[key]=trigger||document.activeElement;modal.classList.remove("hidden");modal.setAttribute("aria-hidden","false");document.body.style.overflow="hidden";modal.querySelector(".modal-close")?.focus()}
+function closeModalById(id){const modal=document.getElementById(id);if(modal.classList.contains("hidden"))return;const key=id==="animeModal"?"anime":"char";modal.classList.add("hidden");modal.setAttribute("aria-hidden","true");lastFocus[key]?.focus?.();lastFocus[key]=null;if(document.querySelectorAll(".modal-overlay:not(.hidden)").length===0)document.body.style.overflow=""}
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){if(!document.getElementById("charModal").classList.contains("hidden"))closeModalById("charModal");else if(!document.getElementById("animeModal").classList.contains("hidden"))closeModalById("animeModal")}});
+async function fetchGraphQL(query,variables={},signal){const r=await fetch(SHIKI_API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query,variables}),signal});const t=await r.text();let j;try{j=JSON.parse(t)}catch{throw Error("Сервер вернул не JSON: "+t.slice(0,100))}if(!r.ok)throw Error(j.error||("HTTP "+r.status));if(j.errors)throw Error(j.errors[0].message);return j.data}
+
+async function searchAnime(){
+ const q=document.getElementById("searchInput").value.trim();if(!q)return;
+ if(searchController)searchController.abort();searchController=new AbortController();
+ const btn=document.getElementById("searchBtn"),err=document.getElementById("error"),loader=document.getElementById("searchLoader"),res=document.getElementById("animeResults");
+ btn.disabled=true;btn.textContent="Поиск...";loader.classList.remove("hidden");err.classList.add("hidden");res.innerHTML="";
+ const query=`query($search:String){animes(search:$search,limit:12){id name russian kind status airedOn{year} poster{originalUrl}}}`;
+ try{
+  const data=await fetchGraphQL(query,{search:q},searchController.signal),animes=data.animes||[];
+  if(!animes.length){res.innerHTML='<p style="color:var(--text-muted)">Ничего не найдено.</p>';return}
+  animes.forEach(a=>{
+   const card=document.createElement("div");card.className="anime-card";card.tabIndex=0;card.setAttribute("role","button");
+   if(currentAnime?.id===a.id)card.classList.add("selected");
+   const title=a.russian||a.name;card.setAttribute("aria-label","Аниме: "+title);
+   card.innerHTML=`<div class="img-container"><img src="${escapeHtml(getValidImageUrl(a.poster?.originalUrl))}" alt="" loading="lazy"></div><div class="anime-card-content"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(a.name)}</p><div><span class="badge">${escapeHtml((a.kind||"TV").toUpperCase())}</span> • ${escapeHtml(a.airedOn?.year||"—")}</div></div>`;
+   attachImgFallback(card.querySelector("img"));card.onclick=e=>openAnimeModal(a,e.currentTarget);card.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openAnimeModal(a,e.currentTarget)}};res.appendChild(card);
+  });
+ }catch(e){if(e.name!=="AbortError"){err.textContent="Ошибка поиска: "+e.message;err.classList.remove("hidden")}}
+ finally{btn.disabled=false;btn.textContent="Найти";loader.classList.add("hidden")}
+}
+document.getElementById("searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")searchAnime()});
+
+function cacheSet(id,value){if(charactersCache.size>=CACHE_LIMIT)charactersCache.delete(charactersCache.keys().next().value);charactersCache.set(id,value)}
+function cacheGet(id){if(!charactersCache.has(id))return null;const v=charactersCache.get(id);charactersCache.delete(id);charactersCache.set(id,v);return v}
+function openAnimeModal(anime,trigger){
+ currentAnime=anime;document.querySelectorAll(".anime-card").forEach(c=>c.classList.remove("selected"));trigger?.classList.add("selected");
+ const img=document.getElementById("animeModalImg");img.src=getValidImageUrl(anime.poster?.originalUrl);attachImgFallback(img);
+ document.getElementById("animeModalTitle").textContent=anime.russian||anime.name;
+ document.getElementById("animeModalMeta").textContent=`${anime.name} • ${(anime.kind||"TV").toUpperCase()} (${anime.airedOn?.year||"—"})`;
+ document.getElementById("charFilter").value="";document.getElementById("progressBar").style.width="0%";document.getElementById("progressText").textContent="";
+ const cached=cacheGet(anime.id);
+ if(cached){allCharacters=cached;document.getElementById("charCounter").textContent=allCharacters.length+" персонажей";document.getElementById("exportBtn").disabled=false;document.getElementById("loadCharsBtn").textContent="Обновить персонажей";renderCharacters()}
+ else{allCharacters=[];document.getElementById("charactersGrid").innerHTML="";document.getElementById("charCounter").textContent="0 персонажей";document.getElementById("exportBtn").disabled=true;document.getElementById("loadCharsBtn").textContent="Загрузить персонажей"}
+ openModal("animeModal",trigger);
+}
+function closeAnimeModal(e){if(!e||e.target.id==="animeModal"||e.target.classList.contains("modal-close"))closeModalById("animeModal")}
+
+async function loadCharacters(){
+ if(!currentAnime)return;const btn=document.getElementById("loadCharsBtn"),grid=document.getElementById("charactersGrid"),bar=document.getElementById("progressBar");
+ btn.disabled=true;document.getElementById("charLoader").classList.remove("hidden");grid.innerHTML="";grid.setAttribute("aria-busy","true");
+ document.getElementById("progressText").textContent="Запрос к Shikimori...";
+ const query=`query($id:String!){animes(ids:$id){characterRoles{rolesEn rolesRu character{id name russian url poster{originalUrl}}}}}`;
+ try{
+  const data=await fetchGraphQL(query,{id:String(currentAnime.id)});bar.style.width="70%";
+  const map=new Map();for(const item of data.animes?.[0]?.characterRoles||[]){const ch=item.character;if(!ch?.id)continue;const role=item.rolesEn?.[0]||item.rolesRu?.[0]||"Main";if(!map.has(ch.id))map.set(ch.id,{id:ch.id,name:ch.name,russian:ch.russian,image:getValidImageUrl(ch.poster?.originalUrl),url:ch.url,role})}
+  allCharacters=[...map.values()];cacheSet(currentAnime.id,allCharacters);document.getElementById("charCounter").textContent=allCharacters.length+" персонажей";document.getElementById("exportBtn").disabled=!allCharacters.length;renderCharacters();bar.style.width="100%";document.getElementById("progressText").textContent=`Готово! Загружено персонажей: ${allCharacters.length}`;
+ }catch(e){grid.innerHTML=`<p class="error">Ошибка загрузки: ${escapeHtml(e.message)}</p>`;document.getElementById("progressText").textContent="Ошибка"}
+ finally{btn.disabled=false;document.getElementById("charLoader").classList.add("hidden");grid.setAttribute("aria-busy","false")}
+}
+function renderCharacters(){
+ const grid=document.getElementById("charactersGrid"),q=document.getElementById("charFilter").value.toLowerCase(),role=document.getElementById("roleFilter").value;
+ const list=allCharacters.filter(c=>((c.russian||"").toLowerCase().includes(q)||(c.name||"").toLowerCase().includes(q))&&(role==="all"||(c.role||"").toLowerCase()===role.toLowerCase()));
+ grid.innerHTML="";if(!list.length){grid.innerHTML='<p style="color:var(--text-muted)">Персонажи не найдены по фильтру.</p>';return}
+ list.slice(0,200).forEach(c=>{const card=document.createElement("div");card.className="char-card";card.tabIndex=0;card.setAttribute("role","button");card.innerHTML=`<div class="img-container" style="height:170px"><img src="${escapeHtml(c.image)}" alt="" loading="lazy"></div><div class="char-info"><div class="char-name">${escapeHtml(c.russian||c.name||"Не указано")}</div><div class="char-role">${escapeHtml(c.role||"Не указано")}</div><span class="details-hint">Подробнее ↗</span></div>`;attachImgFallback(card.querySelector("img"));card.onclick=()=>openCharacterDetails(c,card);card.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();openCharacterDetails(c,card)}};grid.appendChild(card)});
+ if(list.length>200){const p=document.createElement("p");p.style.gridColumn="1/-1";p.textContent=`Показаны первые 200 из ${list.length}`;grid.appendChild(p)}
+}
+
+function addReference(item){
+ const wrap=document.createElement("div");wrap.className="ref-item";wrap.setAttribute("role","listitem");wrap.title=item.source||"Изображение";
+ const img=document.createElement("img");img.src=item.thumb||item.url;img.alt=(item.source||"Референс")+" персонажа";img.loading="lazy";
+ img.addEventListener("click",()=>window.open(item.url,"_blank","noopener,noreferrer"));img.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();window.open(item.url,"_blank","noopener,noreferrer")}});
+ attachImgFallback(img);wrap.appendChild(img);
+ const label=document.createElement("span");label.className="ref-source";label.textContent=item.source||"Источник";wrap.appendChild(label);
+ document.getElementById("modalRefs").appendChild(wrap);
+}
+function addSearchLink(container,label,url){const a=document.createElement("a");a.href=url;a.target="_blank";a.rel="noopener noreferrer";a.textContent=label;container.appendChild(a)}
+async function loadCharacterReferences(char,animeTitle,seq){
+ const refs=document.getElementById("modalRefs"),status=document.getElementById("refStatus"),tools=document.getElementById("refTools");
+ refs.innerHTML="";tools.innerHTML="";
+ const name=char.russian||char.name||"";
+ const q=encodeURIComponent([name,animeTitle].filter(Boolean).join(" "));
+ addSearchLink(tools,"Google Images ↗","https://www.google.com/search?tbm=isch&q="+q);
+ addSearchLink(tools,"Яндекс Картинки ↗","https://yandex.ru/images/search?text="+q);
+ addSearchLink(tools,"Bing Images ↗","https://www.bing.com/images/search?q="+q);
+ addSearchLink(tools,"Pinterest ↗","https://www.pinterest.com/search/pins/?q="+q);
+ status.innerHTML='<span class="loader"></span> Ищем изображения в Safebooru и Wikimedia Commons...';
+ try{
+  const params=new URLSearchParams({character:char.name||name,anime:animeTitle||""});
+  const response=await fetch(REFS_API+"?"+params.toString());
+  const payload=await response.json();
+  if(seq!==detailsSeq)return;
+  const items=payload.items||[];
+  items.forEach(addReference);
+  const sourceInfo=(payload.sources||[]).map(s=>`${s.name}: ${s.ok?s.count+" шт.":"недоступен"}`).join(" • ");
+  if(items.length)status.textContent=`Найдено изображений: ${items.length}. ${sourceInfo}. Нажмите на изображение, чтобы открыть оригинал.`;
+  else status.textContent=`Автоматические источники не вернули изображений. ${sourceInfo}. Используйте поиск по ссылкам выше.`;
+ }catch(e){if(seq!==detailsSeq)return;status.textContent="Не удалось загрузить автоматические референсы: "+e.message+". Поисковые ссылки доступны выше."}
+}
+
+async function openCharacterDetails(char,fromCard){
+ const seq=++detailsSeq,modalImg=document.getElementById("modalImg"),modalRefs=document.getElementById("modalRefs"),modalContent=document.querySelector("#charModal .modal-content");
+ modalImg.src=char.image;modalImg.alt="Портрет: "+(char.russian||char.name||"персонаж");attachImgFallback(modalImg);
+ document.getElementById("modalName").textContent=char.russian||char.name||"Персонаж";document.getElementById("modalRole").textContent="Роль: "+(char.role||"не указана");
+ const cleanUrl=char.url?(char.url.startsWith("http")?char.url:"https://shikimori.io"+char.url):"#";document.getElementById("modalLink").href=cleanUrl;
+ document.getElementById("modalDesc").textContent="Загрузка описания...";modalRefs.innerHTML="";document.getElementById("refStatus").textContent="Подготовка источников...";
+ openModal("charModal",fromCard);modalContent.setAttribute("aria-busy","true");
+ const query=`query($id:String!){characters(ids:$id){description russian name poster{originalUrl}}}`;
+ try{
+  const data=await fetchGraphQL(query,{id:String(char.id)});if(seq!==detailsSeq)return;
+  const details=data.characters?.[0];let charName=details?.russian||details?.name||char.russian||char.name||"";
+  if(details?.description){
+   let desc=escapeHtml(details.description);
+   desc=desc.replace(/\\[character=(\\d+)\\](.*?)\\[\\/character\\]/g,(m,id,n)=>`<a href="https://shikimori.io/characters/${encodeURIComponent(id)}" target="_blank" rel="noopener">${n}</a>`);
+   desc=desc.replace(/\\[spoiler\\]([\\s\\S]*?)\\[\\/spoiler\\]/g,'<span style="background:#334155;padding:2px 6px;border-radius:4px">$1</span>');
+   document.getElementById("modalDesc").innerHTML=desc.replace(/\\n/g,"<br>");
+  }else document.getElementById("modalDesc").textContent="Описание отсутствует.";
+  const unique=new Set();
+  const poster=details?.poster?.originalUrl;
+  for(const url of [poster,char.image])if(url&&url!==MISSING_IMG&&!unique.has(url)){unique.add(url);addReference({url,thumb:url,source:"Shikimori"})}
+  loadCharacterReferences({...char,name:charName},currentAnime?.russian||currentAnime?.name||"",seq);
+ }catch(e){if(seq!==detailsSeq)return;document.getElementById("modalDesc").textContent="Ошибка загрузки описания: "+e.message;loadCharacterReferences(char,currentAnime?.russian||currentAnime?.name||"",seq)}
+ finally{if(seq===detailsSeq)modalContent.setAttribute("aria-busy","false")}
+}
+function closeModal(e){if(!e||e.target.id==="charModal"||e.target.classList.contains("modal-close"))closeModalById("charModal")}
+function exportJSON(){if(!currentAnime||!allCharacters.length)return;const data={anime:{id:currentAnime.id,title:currentAnime.russian||currentAnime.name},characters:allCharacters};const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`shikimori_${currentAnime.id}.json`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},100)}
+</script>
+</body>
+</html>
