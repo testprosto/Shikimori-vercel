@@ -5,9 +5,7 @@
     { "src": "public/**", "use": "@vercel/static" }
   ],
   "rewrites": [
-    { "source": "/api/shiki", "destination": "/api/index.py" },
     { "source": "/api/shiki/(.*)", "destination": "/api/index.py" },
-    { "source": "/api/refs", "destination": "/api/index.py" },
     { "source": "/(.*)", "destination": "/public/$1" }
   ],
   "headers": [
